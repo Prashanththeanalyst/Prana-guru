@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -12,6 +12,7 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.openai import OpenAISpeechToText, OpenAITextToSpeech
 
 # Import astrology module
 from astrology import (
@@ -30,9 +31,9 @@ db = client[os.environ['DB_NAME']]
 # Emergent LLM Key
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 
-# Bhashini API Configuration
-BHASHINI_API_KEY = os.environ.get('BHASHINI_API_KEY', '')
-BHASHINI_USER_ID = os.environ.get('BHASHINI_USER_ID', '')
+# Initialize OpenAI STT and TTS
+stt_client = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY)
+tts_client = OpenAITextToSpeech(api_key=EMERGENT_LLM_KEY)
 
 # Create the main app without a prefix
 app = FastAPI(title="Prana Guru API", description="Spiritual Companion & Vedic Astrology API")
