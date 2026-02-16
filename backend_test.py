@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 class PocketGuruAPITester:
-    def __init__(self, base_url="https://vedic-companion-2.preview.emergentagent.com/api"):
+    def __init__(self, base_url="https://prana-guru-preview.preview.emergentagent.com/api"):
         self.base_url = base_url
         self.tests_run = 0
         self.tests_passed = 0

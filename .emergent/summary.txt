@@ -1,0 +1,169 @@
+<analysis>**original_problem_statement:**
+The user initially requested a web-based Pocket Guru, a WhatsApp-style chat application where an AI spiritual guide named Prana provides support based on Vedic literature. The AI's persona was required to be adaptable to the user's spiritual alignment (Jnana, Bhakti, Karma).
+
+The project's scope then expanded significantly into building a full-fledged, voice-first mobile application for both Android and iOS called Prana Guru.
+
+**PRODUCT REQUIREMENTS (Mobile App):**
+-   **Platform:** React Native.
+-   **Core Features:**
+    -   An AI Spiritual Companion (Prana).
+    -   **Astrology Suite:** Kundali (Horoscope), Salavali (Compatibility Matching), Raashi Bhavishya (Daily Horoscope), and Numerology, using basic in-house calculations.
+    -   **Wellness Suite:** Guided Meditations with an audio player.
+    -   **Utilities:** A calendar for important festivals and events (Living Panchang).
+-   **UI/UX:** A voice-first interface that supports both text and voice commands in multiple Indian languages, though the current implementation is primarily English.
+-   **Integrations:**
+    -   **AI Chat:** Gemini 3 Flash (via Emergent LLM Key).
+    -   **Voice:** OpenAI Whisper (Speech-to-Text) and OpenAI TTS (Text-to-Speech), both using the Emergent LLM Key.
+-   **Branding:** All instances of Emergent branding must be removed from the application.
+
+**User's preferred language**: English
+
+**what currently exists?**
+A full-stack application is in place. The FastAPI backend serves all necessary APIs for both the original web app and the new mobile app, including AI chat, user onboarding, scripture matching, in-house astrology calculations, festival data, and OpenAI-powered voice-to-text/text-to-speech services.
+
+A complete React Native mobile app has been scaffolded in the  directory. This includes all screens, navigation, API service integration, and Expo configuration () required for building the app. A deployment guide () and placeholder icons have also been created.
+
+The original React web application also exists and is functional.
+
+**Last working item**:
+-   **Last item agent was working:** Preparing the React Native mobile app for an Expo cloud build. This involved updating the  configuration file and creating placeholder icon assets to facilitate the build process for the user. The agent was in the middle of providing step-by-step instructions to the user.
+-   **Status:** IN PROGRESS
+-   **Agent Testing Done:** Y
+-   **Which testing method agent to use?** Manual testing by user. The next step is to provide the user with clear, non-technical instructions to perform an Expo cloud build, as the agent cannot execute this directly.
+-   **User Testing Done:** N
+
+**All Pending/In progress Issue list**:
+-   **Issue 1: Guide User Through Expo Cloud Build (P0)**: The user is non-technical and needs a simple, step-by-step guide to use Expo's cloud build service to generate an Android APK file from the codebase.
+
+    **Issues Detail:**
+    -   **Issue 1: Guide User Through Expo Cloud Build**
+        -   **Attempted fixes:** The agent has prepared the necessary configuration files () but has not yet provided the instructional guide.
+        -   **Next debug checklist:**
+            1.  Provide a clear, numbered, step-by-step guide for a non-technical user.
+            2.  The guide must explain how to create a free account on .
+            3.  It should detail how to connect their GitHub repository to Expo.
+            4.  It must show how to navigate the Expo dashboard to start a new build, specifically for an Android APK.
+            5.  Finally, it should explain how to download and install the generated APK on their phone.
+        -   **Why fix this issue and what will be achieved with the fix?** This directly addresses the user's last request and is the only way for them to test the mobile app, which is the project's primary goal.
+        -   **Status:** NOT STARTED
+        -   **Is recurring issue?** N
+        -   **Should Test frontend/backend/both after fix?** N/A (The user will perform manual testing of the mobile app).
+        -   **Blocked on other issue:** None.
+
+**In progress Task List**:
+There are no tasks that were started and left partially incomplete. The last action was part of a larger goal that is now captured in the pending issue list.
+
+**Upcoming and Future Tasks**
+**Upcoming Tasks:**
+-   **P0: Mobile App Testing & Feedback:** After the user builds and tests the APK, the agent must be ready to address any bugs, UI/UX feedback, or functional issues they report.
+
+**Future Tasks:**
+-   **P1: Integrate Professional Astrology API:** Replace the current basic, in-house astrology calculations with a professional API (e.g., AstrologyAPI.com) for greater accuracy. This will involve updating .
+-   **P1: Implement Full Multilingual Voice Support:** Integrate a dedicated multilingual solution like Bhashini or Sarvam AI to support the requested Indian regional languages for voice commands and responses.
+-   **P2: Implement Proactive Guru & Calendar Integration:** Add the feature for the AI to offer proactive advice based on user history and events from an integrated Google Calendar.
+-   **P2: Enhance Guided Meditations:** Develop a full-featured audio player for meditation, including ambient soundscapes (e.g., Tanpura, Vedic chants). This would affect .
+-   **P2: Finalize App Icons:** Replace the current placeholder icons in  with final assets provided by the user.
+
+**Completed work in this session**
+-   **Full-Stack Web App:** Created a functional web application with a React frontend and FastAPI backend, featuring a WhatsApp-style chat interface, user onboarding, and an admin dashboard.
+-   **AI & Logic Refinements:**
+    -   Refined AI prompts in  to make responses more conversational.
+    -   Fixed a critical bug in  that caused the same scripture to be attached to every AI response.
+-   **Branding Removal:** Successfully removed all Emergent branding from the web application's .
+-   **Pivot to Mobile App:**
+    -   Architected and implemented backend support for all new mobile features, including APIs for astrology, numerology, festivals, and voice (STT/TTS) in .
+    -   Migrated the voice engine from the initially proposed Bhashini API to OpenAI Whisper and TTS.
+    -   Scaffolded a complete React Native project in , including all screens, services, and navigation.
+    -   Created a  and configured  for Expo builds.
+
+**Earlier issues found/mentioned but not fixed**
+There are no known issues that were mentioned by the user or found by the agent that remain unfixed.
+
+**Known issue recurrence from previous fork**
+None.
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+-   **Frontend:** React (for web), React Native with Expo (for mobile).
+-   **Backend:** FastAPI (Python).
+-   **Database:** MongoDB.
+-   **AI/LLM:** Gemini 3 Flash (for chat), OpenAI Whisper (Speech-to-Text), OpenAI TTS (Text-to-Speech).
+-   **Deployment:** The mobile app is intended for deployment via Expo Application Services (EAS) Cloud Build.
+
+**key DB schema**
+(Implicitly defined via Pydantic models in )
+-   **User:** Stores user preferences like spiritual  and .
+-   **Conversation:** Tracks chat history between a user and the AI.
+-   **Message:** Represents an individual message within a conversation.
+-   **ScriptureSnippet:** Contains Vedic verses, translations, and keywords for matching.
+
+**changes in tech stack**
+-   **Project Focus:** Major pivot from a web application to a React Native mobile application.
+-   **Voice Technology:** Shifted from the proposed Bhashini API to the implemented OpenAI Whisper (STT) and TTS.
+
+**All files of reference**
+-   : The monolithic backend file containing all API logic for both web and mobile apps.
+-   : The critical Expo configuration file for the mobile app build.
+-   : The main entry point and navigator for the React Native application.
+-   : Manages all API calls from the mobile app to the backend.
+-   : A markdown file containing instructions for deploying the mobile app.
+
+**Areas that need refactoring**:
+The  file has grown very large and contains logic for all features (chat, astrology, voice, etc.). It should be refactored into a more modular structure using FastAPI's  to improve maintainability.
+
+**key api endpoints**
+-   : Handles AI chat interactions.
+-   : Generates a horoscope.
+-   : Performs compatibility matching.
+-   : Handles Speech-to-Text conversion.
+-   : Handles Text-to-Speech conversion.
+-   : Provides data for the admin dashboard.
+
+**Critical Info for New Agent**
+-   **Primary Focus is the Mobile App:** The user's priority has shifted entirely to the React Native mobile app located in . The original web app is now secondary.
+-   **User is Non-Technical:** Communicate in simple, clear terms. The immediate task is to provide a step-by-step guide for a non-coder to build an APK using Expo's cloud service.
+-   **Voice Integration is Done with OpenAI:** The plan to use Bhashini was abandoned. The app now uses OpenAI Whisper and TTS, powered by the Emergent LLM Key.
+-   **Astrology is In-House:** The current astrology features use basic Python logic, not an external paid API. This was a deliberate choice by the user to start.
+
+**documents and test reports created in this job**
+-   
+-   
+-   
+-   
+-   
+-   
+
+**Last 10 User Messages and any pending HUMAN messages**
+1.  ** (PENDING):** The user explicitly chose to receive a guided walkthrough for the Expo cloud build process.
+2.  **:** User stressed their non-technical background and asked for the simplest method to get a testable app file.
+3.  **:** User asked for a direct way to test the mobile app, which the agent explained was not possible in the cloud environment.
+4.  **:** The user selected OpenAI for the voice features and requested a deployment guide.
+5.  **:** User reported an issue and asked for alternative voice solutions, leading to the OpenAI pivot.
+6.  **:** A request to remove all platform branding.
+7.  **:** User reported a bug with the scripture-matching logic.
+8.  **:** User provided feedback to make the AI's chat responses shorter.
+9.  A detailed message outlining the pivot to a full-featured mobile app.
+10. A message confirming the technical choices (React Native, Bhashini, in-house calculations) for the new mobile app.
+
+**Project Health Check:**
+-   **Broken:** The mobile app is not accessible for testing by the user because an APK has not been built yet. The core functionality depends on the user successfully completing the Expo cloud build.
+-   **Mocked:** No features are mocked. The astrology calculations are implemented with basic logic as requested.
+
+**3rd Party Integrations**
+-   **OpenAI GPT (via Gemini 3 Flash in )**: Powers the core AI chat. Uses Emergent LLM Key.
+-   **OpenAI Whisper (STT)**: Provides speech-to-text functionality. Uses Emergent LLM Key.
+-   **OpenAI TTS**: Provides text-to-speech functionality. Uses Emergent LLM Key.
+
+**Testing status**
+-   **Testing agent used after significant changes:** YES. The backend APIs, including all new endpoints for the mobile app, were successfully verified by the testing agent.
+-   **Troubleshoot agent used after agent stuck in loop:** NO.
+-   **Test files created:** None. Testing was performed using the  tool.
+-   **Known regressions:** None.
+
+**Credentials to test flow:**
+N/A. The application flow starts with user onboarding and does not require pre-existing credentials for testing.
+
+**What agent forgot to execute**
+The agent did not provide the final, user-friendly, step-by-step guide for the Expo Cloud Build process. Although it prepared the necessary files, it stopped before delivering the crucial instructions that the user explicitly requested to complete their task.</analysis>
