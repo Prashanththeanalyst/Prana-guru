@@ -856,31 +856,6 @@ async def translate_text(request: TranslateRequest):
             "source_language": request.source_language,
             "target_language": request.target_language
         }
-                    "inputData": {"input": [{"source": request.text}]}
-                }
-                
-                trans_resp = await client.post(
-                    inference_url,
-                    json=translate_payload,
-                    headers={
-                        "Content-Type": "application/json",
-                        "Authorization": inference_key
-                    }
-                )
-                trans_data = trans_resp.json()
-                
-                translated = trans_data.get("pipelineResponse", [{}])[0].get("output", [{}])[0].get("target", "")
-                return {
-                    "original": request.text,
-                    "translated": translated,
-                    "source_language": request.source_language,
-                    "target_language": request.target_language
-                }
-        
-        return {"error": "Failed to get pipeline config"}
-    except Exception as e:
-        logging.error(f"Translation Error: {e}")
-        return {"error": str(e)}
 
 
 # ============== MEDITATION ROUTES ==============
