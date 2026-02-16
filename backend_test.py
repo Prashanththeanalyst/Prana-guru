@@ -513,7 +513,7 @@ class PocketGuruAPITester:
             
         return success
 
-    # ============== VOICE/BHASHINI TESTS ==============
+    # ============== VOICE/OPENAI TTS TESTS ==============
     
     def test_get_supported_languages(self):
         """Test getting supported languages for voice"""
@@ -532,6 +532,151 @@ class PocketGuruAPITester:
                 if lang not in languages:
                     print(f"   Warning: Missing expected language {lang}")
             
+        return success
+
+    def test_get_available_voices(self):
+        """Test getting available TTS voices"""
+        success, response = self.run_test(
+            "Get Available TTS Voices",
+            "GET",
+            "voice/voices",
+            200
+        )
+        
+        if success:
+            voices = response if isinstance(response, dict) else {}
+            print(f"   Found {len(voices)} available voices")
+            # Check for sage voice specifically mentioned
+            if 'sage' not in voices:
+                self.log_test("Sage Voice Available", False, "Sage voice not found in available voices")
+                return False
+            else:
+                print(f"   Sage voice: {voices['sage']}")
+            
+        return success
+
+    def test_text_to_speech_standard(self):
+        """Test standard TTS with sage voice"""
+        tts_data = {
+            "text": "Namaste, welcome to Prana Guru. May you find peace and wisdom in our conversation.",
+            "voice": "sage",
+            "speed": 0.9
+        }
+        
+        success, response = self.run_test(
+            "Text-to-Speech Standard (Sage Voice)",
+            "POST",
+            "voice/tts",
+            200,
+            data=tts_data
+        )
+        
+        if success:
+            expected_keys = ['audio_base64', 'text', 'voice', 'format', 'model']
+            for key in expected_keys:
+                if key not in response:
+                    self.log_test(f"TTS Standard - Missing {key}", False, f"Response missing {key}")
+                    return False
+            
+            # Check if audio_base64 is present and not empty
+            if not response.get('audio_base64'):
+                self.log_test("TTS Standard - Audio Generation", False, "No audio_base64 in response")
+                return False
+                
+            print(f"   Generated audio for: {response.get('text', '')[:50]}...")
+            print(f"   Voice: {response.get('voice', 'N/A')}")
+            print(f"   Model: {response.get('model', 'N/A')}")
+            print(f"   Format: {response.get('format', 'N/A')}")
+            print(f"   Audio data length: {len(response.get('audio_base64', ''))}")
+            
+        return success
+
+    def test_text_to_speech_hd(self):
+        """Test HD quality TTS"""
+        tts_data = {
+            "text": "Om Shanti Shanti Shanti. May the divine light guide you on your spiritual journey.",
+            "voice": "sage",
+            "speed": 0.9
+        }
+        
+        success, response = self.run_test(
+            "Text-to-Speech HD Quality",
+            "POST",
+            "voice/tts/hd",
+            200,
+            data=tts_data
+        )
+        
+        if success:
+            expected_keys = ['audio_base64', 'text', 'voice', 'format', 'model']
+            for key in expected_keys:
+                if key not in response:
+                    self.log_test(f"TTS HD - Missing {key}", False, f"Response missing {key}")
+                    return False
+            
+            # Verify HD model
+            if response.get('model') != 'tts-1-hd':
+                self.log_test("TTS HD Model", False, f"Expected tts-1-hd, got {response.get('model')}")
+                return False
+                
+            print(f"   Generated HD audio for: {response.get('text', '')[:50]}...")
+            print(f"   HD Model: {response.get('model', 'N/A')}")
+            print(f"   Audio data length: {len(response.get('audio_base64', ''))}")
+            
+        return success
+
+    def test_translate_text(self):
+        """Test text translation using Gemini"""
+        translate_data = {
+            "text": "Hello, how are you today?",
+            "source_language": "en",
+            "target_language": "hi"
+        }
+        
+        success, response = self.run_test(
+            "Translate Text (English to Hindi)",
+            "POST",
+            "voice/translate",
+            200,
+            data=translate_data
+        )
+        
+        if success:
+            expected_keys = ['original', 'translated', 'source_language', 'target_language']
+            for key in expected_keys:
+                if key not in response:
+                    self.log_test(f"Translation - Missing {key}", False, f"Response missing {key}")
+                    return False
+            
+            print(f"   Original: {response.get('original', '')}")
+            print(f"   Translated: {response.get('translated', '')}")
+            print(f"   Direction: {response.get('source_language')} → {response.get('target_language')}")
+            
+            # Check if translation is different from original (basic check)
+            if response.get('original') == response.get('translated'):
+                print(f"   Warning: Translation appears unchanged")
+            
+        return success
+
+    def test_tts_error_handling(self):
+        """Test TTS with overly long text (should handle gracefully)"""
+        long_text = "A" * 5000  # Over the 4096 character limit
+        
+        tts_data = {
+            "text": long_text,
+            "voice": "sage",
+            "speed": 0.9
+        }
+        
+        # This should return a 400 error for too long text
+        success, response = self.run_test(
+            "TTS Error Handling (Long Text)",
+            "POST",
+            "voice/tts",
+            400,  # Expecting error
+            data=tts_data
+        )
+        
         return success
 
     def run_all_tests(self):
