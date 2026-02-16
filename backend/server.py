@@ -647,7 +647,7 @@ async def list_nakshatras():
     return NAKSHATRAS
 
 
-# ============== VOICE/BHASHINI ROUTES ==============
+# ============== VOICE ROUTES (OpenAI Whisper + TTS) ==============
 
 SUPPORTED_LANGUAGES = {
     "en": "English",
@@ -662,13 +662,23 @@ SUPPORTED_LANGUAGES = {
     "ml": "Malayalam"
 }
 
+# OpenAI TTS Voice options - "sage" is perfect for a wise guru
+TTS_VOICES = {
+    "sage": "Wise, measured (Default Guru voice)",
+    "echo": "Smooth, calm",
+    "nova": "Warm, friendly",
+    "alloy": "Neutral, balanced",
+    "shimmer": "Bright, gentle"
+}
+
 class VoiceToTextRequest(BaseModel):
     audio_base64: str
     source_language: str = "hi"
 
 class TextToVoiceRequest(BaseModel):
     text: str
-    target_language: str = "hi"
+    voice: str = "sage"  # Best for spiritual guru
+    speed: float = 0.9  # Slightly slower for contemplative feel
     
 class TranslateRequest(BaseModel):
     text: str
@@ -678,176 +688,174 @@ class TranslateRequest(BaseModel):
 
 @api_router.get("/voice/languages")
 async def get_supported_languages():
-    """Get list of supported languages"""
+    """Get list of supported languages for STT"""
     return SUPPORTED_LANGUAGES
+
+
+@api_router.get("/voice/voices")
+async def get_available_voices():
+    """Get list of available TTS voices"""
+    return TTS_VOICES
 
 
 @api_router.post("/voice/stt")
 async def speech_to_text(request: VoiceToTextRequest):
     """
-    Convert speech to text using Bhashini API
-    Note: Requires BHASHINI_API_KEY to be set
+    Convert speech to text using OpenAI Whisper
+    Supports multiple languages including Hindi
     """
-    if not BHASHINI_API_KEY:
-        # Fallback: return mock response for demo
-        return {
-            "text": "नमस्ते, मुझे आध्यात्मिक मार्गदर्शन चाहिए",
-            "language": request.source_language,
-            "note": "Demo mode - Bhashini API key not configured"
-        }
-    
     try:
-        # Bhashini ASR Pipeline
-        config_url = "https://meity-auth.ulcacontrib.org/ulca/apis/v0/model/getModelsPipeline"
+        # Decode base64 audio
+        audio_bytes = base64.b64decode(request.audio_base64)
         
-        config_payload = {
-            "pipelineTasks": [{"taskType": "asr", "config": {"language": {"sourceLanguage": request.source_language}}}],
-            "pipelineRequestConfig": {"pipelineId": "64392f96daac500b55c543cd"}
+        # Create a temporary file-like object
+        import io
+        audio_file = io.BytesIO(audio_bytes)
+        audio_file.name = "audio.webm"  # Whisper accepts webm
+        
+        # Transcribe using OpenAI Whisper
+        response = await stt_client.transcribe(
+            file=audio_file,
+            model="whisper-1",
+            language=request.source_language if request.source_language != "hi" else None,  # Let Whisper auto-detect for Hindi
+            response_format="json"
+        )
+        
+        return {
+            "text": response.text,
+            "language": request.source_language,
+            "model": "whisper-1"
         }
-        
-        async with httpx.AsyncClient() as client:
-            # Get pipeline config
-            config_resp = await client.post(
-                config_url,
-                json=config_payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "userID": BHASHINI_USER_ID,
-                    "ulcaApiKey": BHASHINI_API_KEY
-                }
-            )
-            config_data = config_resp.json()
-            
-            # Call inference endpoint
-            inference_url = config_data.get("pipelineInferenceAPIEndPoint", {}).get("callbackUrl")
-            inference_key = config_data.get("pipelineInferenceAPIEndPoint", {}).get("inferenceApiKey", {}).get("value")
-            
-            if inference_url:
-                inference_payload = {
-                    "pipelineTasks": [{"taskType": "asr", "config": {"language": {"sourceLanguage": request.source_language}}}],
-                    "inputData": {"audio": [{"audioContent": request.audio_base64}]}
-                }
-                
-                asr_resp = await client.post(
-                    inference_url,
-                    json=inference_payload,
-                    headers={
-                        "Content-Type": "application/json",
-                        "Authorization": inference_key
-                    }
-                )
-                asr_data = asr_resp.json()
-                
-                text = asr_data.get("pipelineResponse", [{}])[0].get("output", [{}])[0].get("source", "")
-                return {"text": text, "language": request.source_language}
-        
-        return {"error": "Failed to get pipeline config"}
     except Exception as e:
         logging.error(f"STT Error: {e}")
         return {"error": str(e), "text": "", "language": request.source_language}
 
 
+@api_router.post("/voice/stt/upload")
+async def speech_to_text_file(file: UploadFile = File(...), language: str = "en"):
+    """
+    Convert uploaded audio file to text using OpenAI Whisper
+    Supports: mp3, mp4, mpeg, mpga, m4a, wav, webm
+    """
+    try:
+        # Read the uploaded file
+        audio_bytes = await file.read()
+        
+        import io
+        audio_file = io.BytesIO(audio_bytes)
+        audio_file.name = file.filename or "audio.mp3"
+        
+        # Transcribe
+        response = await stt_client.transcribe(
+            file=audio_file,
+            model="whisper-1",
+            language=language if language != "auto" else None,
+            response_format="json"
+        )
+        
+        return {
+            "text": response.text,
+            "language": language,
+            "filename": file.filename,
+            "model": "whisper-1"
+        }
+    except Exception as e:
+        logging.error(f"STT Upload Error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @api_router.post("/voice/tts")
 async def text_to_speech(request: TextToVoiceRequest):
     """
-    Convert text to speech using Bhashini API
-    Note: Requires BHASHINI_API_KEY to be set
+    Convert text to speech using OpenAI TTS
+    Returns base64 encoded audio
     """
-    if not BHASHINI_API_KEY:
-        # Return info for demo mode
-        return {
-            "audio_base64": "",
-            "text": request.text,
-            "language": request.target_language,
-            "note": "Demo mode - Bhashini API key not configured. Use browser TTS as fallback."
-        }
-    
     try:
-        config_url = "https://meity-auth.ulcacontrib.org/ulca/apis/v0/model/getModelsPipeline"
+        # Validate text length (max 4096 chars)
+        if len(request.text) > 4096:
+            raise HTTPException(status_code=400, detail="Text too long. Maximum 4096 characters.")
         
-        config_payload = {
-            "pipelineTasks": [{"taskType": "tts", "config": {"language": {"sourceLanguage": request.target_language}}}],
-            "pipelineRequestConfig": {"pipelineId": "64392f96daac500b55c543cd"}
+        # Generate speech using OpenAI TTS
+        audio_base64 = await tts_client.generate_speech_base64(
+            text=request.text,
+            model="tts-1",  # Use standard model for faster response
+            voice=request.voice,
+            speed=request.speed,
+            response_format="mp3"
+        )
+        
+        return {
+            "audio_base64": audio_base64,
+            "text": request.text,
+            "voice": request.voice,
+            "format": "mp3",
+            "model": "tts-1"
         }
-        
-        async with httpx.AsyncClient() as client:
-            config_resp = await client.post(
-                config_url,
-                json=config_payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "userID": BHASHINI_USER_ID,
-                    "ulcaApiKey": BHASHINI_API_KEY
-                }
-            )
-            config_data = config_resp.json()
-            
-            inference_url = config_data.get("pipelineInferenceAPIEndPoint", {}).get("callbackUrl")
-            inference_key = config_data.get("pipelineInferenceAPIEndPoint", {}).get("inferenceApiKey", {}).get("value")
-            
-            if inference_url:
-                tts_payload = {
-                    "pipelineTasks": [{"taskType": "tts", "config": {"language": {"sourceLanguage": request.target_language}, "gender": "female"}}],
-                    "inputData": {"input": [{"source": request.text}]}
-                }
-                
-                tts_resp = await client.post(
-                    inference_url,
-                    json=tts_payload,
-                    headers={
-                        "Content-Type": "application/json",
-                        "Authorization": inference_key
-                    }
-                )
-                tts_data = tts_resp.json()
-                
-                audio = tts_data.get("pipelineResponse", [{}])[0].get("audio", [{}])[0].get("audioContent", "")
-                return {"audio_base64": audio, "text": request.text, "language": request.target_language}
-        
-        return {"error": "Failed to get pipeline config"}
     except Exception as e:
         logging.error(f"TTS Error: {e}")
-        return {"error": str(e), "audio_base64": "", "language": request.target_language}
+        return {"error": str(e), "audio_base64": "", "text": request.text}
+
+
+@api_router.post("/voice/tts/hd")
+async def text_to_speech_hd(request: TextToVoiceRequest):
+    """
+    High-quality TTS using OpenAI TTS-1-HD
+    Better quality but slower
+    """
+    try:
+        if len(request.text) > 4096:
+            raise HTTPException(status_code=400, detail="Text too long. Maximum 4096 characters.")
+        
+        audio_base64 = await tts_client.generate_speech_base64(
+            text=request.text,
+            model="tts-1-hd",  # High definition model
+            voice=request.voice,
+            speed=request.speed,
+            response_format="mp3"
+        )
+        
+        return {
+            "audio_base64": audio_base64,
+            "text": request.text,
+            "voice": request.voice,
+            "format": "mp3",
+            "model": "tts-1-hd"
+        }
+    except Exception as e:
+        logging.error(f"TTS HD Error: {e}")
+        return {"error": str(e), "audio_base64": "", "text": request.text}
 
 
 @api_router.post("/voice/translate")
 async def translate_text(request: TranslateRequest):
-    """Translate text between languages"""
-    if not BHASHINI_API_KEY:
+    """
+    Translate text using Gemini
+    """
+    try:
+        # Use Gemini for translation
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"translate-{uuid.uuid4()}",
+            system_message=f"You are a translator. Translate the following text from {request.source_language} to {request.target_language}. Only output the translation, nothing else."
+        ).with_model("gemini", "gemini-3-flash-preview")
+        
+        translated = await chat.send_message(UserMessage(text=request.text))
+        
         return {
             "original": request.text,
-            "translated": request.text,  # Return original in demo mode
+            "translated": translated,
             "source_language": request.source_language,
-            "target_language": request.target_language,
-            "note": "Demo mode - Bhashini API key not configured"
+            "target_language": request.target_language
         }
-    
-    try:
-        config_url = "https://meity-auth.ulcacontrib.org/ulca/apis/v0/model/getModelsPipeline"
-        
-        config_payload = {
-            "pipelineTasks": [{"taskType": "translation", "config": {"language": {"sourceLanguage": request.source_language, "targetLanguage": request.target_language}}}],
-            "pipelineRequestConfig": {"pipelineId": "64392f96daac500b55c543cd"}
+    except Exception as e:
+        logging.error(f"Translation Error: {e}")
+        return {
+            "error": str(e),
+            "original": request.text,
+            "translated": request.text,
+            "source_language": request.source_language,
+            "target_language": request.target_language
         }
-        
-        async with httpx.AsyncClient() as client:
-            config_resp = await client.post(
-                config_url,
-                json=config_payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "userID": BHASHINI_USER_ID,
-                    "ulcaApiKey": BHASHINI_API_KEY
-                }
-            )
-            config_data = config_resp.json()
-            
-            inference_url = config_data.get("pipelineInferenceAPIEndPoint", {}).get("callbackUrl")
-            inference_key = config_data.get("pipelineInferenceAPIEndPoint", {}).get("inferenceApiKey", {}).get("value")
-            
-            if inference_url:
-                translate_payload = {
-                    "pipelineTasks": [{"taskType": "translation", "config": {"language": {"sourceLanguage": request.source_language, "targetLanguage": request.target_language}}}],
                     "inputData": {"input": [{"source": request.text}]}
                 }
                 
