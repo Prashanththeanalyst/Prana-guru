@@ -7,15 +7,5 @@ module.exports = {
   extends: [
     'react-app',
   ],
-  parserOptions: {
-    ecmaFeatures: {
-      jsx: true,
-    },
-    ecmaVersion: 'latest',
-    sourceType: 'module',
-  },
-  rules: {
-    'no-unused-vars': 'warn',
-    'react/prop-types': 'off',
-  },
+  rules: {},
 };
