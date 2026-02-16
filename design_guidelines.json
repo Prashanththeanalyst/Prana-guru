@@ -1,0 +1,159 @@
+{
+  "identity": {
+    "app_name": "Pocket Guru",
+    "persona": {
+      "name": "Prana",
+      "role": "Spiritual Guide",
+      "voice": "Wise, Compassionate, Serene, Rooted in Vedic Wisdom",
+      "avatar_url": "https://images.unsplash.com/photo-1662302392561-b1deecd3579d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDR8MHwxfHNlYXJjaHwxfHxwZWFjZWZ1bCUyMGluZGlhbiUyMHNwaXJpdHVhbCUyMGd1cnUlMjBwb3J0cmFpdHxlbnwwfHx8fDE3NzEyNDIxNTR8MA&ixlib=rb-4.1.0&q=85"
+    },
+    "description": "A spiritual AI assistant with a WhatsApp-style interface, offering guidance based on Indian wisdom traditions."
+  },
+  "typography": {
+    "fonts": {
+      "heading": {
+        "family": "Cormorant Garamond, serif",
+        "usage": "Use for all main titles, Guru's name, and spiritual concepts.",
+        "weights": ["400", "600", "700"]
+      },
+      "body": {
+        "family": "Lato, sans-serif",
+        "usage": "Use for chat messages, UI text, and inputs.",
+        "weights": ["400", "700"]
+      },
+      "scripture": {
+        "family": "Martel, serif",
+        "usage": "Use specifically for Sanskrit Shlokas and quotes.",
+        "weights": ["400", "800"]
+      }
+    },
+    "scale": {
+      "h1": "text-4xl md:text-5xl font-serif tracking-tight",
+      "h2": "text-3xl md:text-4xl font-serif",
+      "h3": "text-2xl font-serif font-semibold",
+      "body_lg": "text-lg leading-relaxed",
+      "body_base": "text-base leading-relaxed",
+      "caption": "text-sm text-muted-foreground"
+    }
+  },
+  "colors": {
+    "theme": "light",
+    "palette": {
+      "background": {
+        "default": "#F0F2F5", 
+        "paper": "#FFFFFF",
+        "chat_bg": "#E5DDD5"
+      },
+      "primary": {
+        "main": "#128C7E",
+        "dark": "#075E54",
+        "light": "#25D366",
+        "foreground": "#FFFFFF"
+      },
+      "secondary": {
+        "main": "#D97706",
+        "light": "#FCD34D",
+        "foreground": "#FFFFFF"
+      },
+      "text": {
+        "primary": "#111B21",
+        "secondary": "#667781",
+        "muted": "#8696A0"
+      },
+      "chat": {
+        "user_bubble": "#D9FDD3",
+        "guru_bubble": "#FFFFFF",
+        "system_bubble": "#FFF5C4"
+      },
+      "status": {
+        "success": "#25D366",
+        "error": "#EF4444",
+        "warning": "#F59E0B"
+      }
+    }
+  },
+  "layout": {
+    "structure": {
+      "mobile": "Single column, fixed header, scrollable chat area, fixed bottom input.",
+      "desktop": "Split view: Left Sidebar (30-40% width) for History/Menu, Right Panel (60-70%) for Chat.",
+      "container": "max-w-7xl mx-auto h-[100dvh] overflow-hidden bg-background shadow-2xl md:my-4 md:h-[95vh] md:rounded-xl border border-border/40"
+    },
+    "spacing": {
+      "chat_bubble_padding": "p-3 px-4",
+      "container_padding": "p-4 md:p-6"
+    },
+    "z_index": {
+      "header": 50,
+      "overlay": 40,
+      "chat_input": 30
+    }
+  },
+  "components": {
+    "chat_bubble": {
+      "base": "relative max-w-[85%] md:max-w-[70%] rounded-lg shadow-sm text-[15px] leading-snug break-words",
+      "user": "bg-[#D9FDD3] ml-auto rounded-tr-none text-gray-900",
+      "guru": "bg-white mr-auto rounded-tl-none text-gray-900 border border-gray-100",
+      "timestamp": "text-[10px] text-gray-500 block text-right mt-1"
+    },
+    "shloka_card": {
+      "style": "bg-[#FFF8E1] border-l-4 border-[#D97706] p-4 my-2 rounded-r-md shadow-sm",
+      "sanskrit_style": "font-serif text-[#D97706] text-lg font-semibold mb-2 block",
+      "translation_style": "text-gray-700 italic text-sm"
+    },
+    "input_area": {
+      "wrapper": "bg-[#F0F2F5] p-3 flex items-center gap-2",
+      "input": "bg-white rounded-full px-4 py-2 flex-1 border-none focus:ring-0 shadow-sm text-sm"
+    },
+    "onboarding_card": {
+      "style": "bg-white p-6 rounded-xl border border-gray-100 shadow-md hover:shadow-lg transition-all cursor-pointer hover:border-[#128C7E]",
+      "selected": "border-[#128C7E] ring-2 ring-[#128C7E]/20 bg-[#F0FDF4]"
+    }
+  },
+  "assets": {
+    "images": {
+      "guru_avatar": "https://images.unsplash.com/photo-1662302392561-b1deecd3579d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDR8MHwxfHNlYXJjaHwxfHxwZWFjZWZ1bCUyMGluZGlhbiUyMHNwaXJpdHVhbCUyMGd1cnUlMjBwb3J0cmFpdHxlbnwwfHx8fDE3NzEyNDIxNTR8MA&ixlib=rb-4.1.0&q=85",
+      "logo_concept": "https://images.unsplash.com/photo-1765814734789-bf702d2013da?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2MzR8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwbG90dXMlMjBmbG93ZXIlMjBpbGx1c3RyYXRpb258ZW58MHx8fHwxNzcxMjQyMTU1fDA&ixlib=rb-4.1.0&q=85",
+      "chat_background_pattern": "opacity-[0.06] bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] or similar subtle geometric pattern"
+    },
+    "icons": {
+      "jnana": "BookOpen",
+      "bhakti": "Heart",
+      "karma": "HandHelping",
+      "raja": "Crown"
+    }
+  },
+  "motion": {
+    "guidelines": "Use slow, deliberate ease-out curves (0.4s). Avoid bouncy springs. Transitions should feel like a deep breath.",
+    "page_transition": "opacity-0 translate-y-2 -> opacity-100 translate-y-0",
+    "message_enter": "scale-95 opacity-0 -> scale-100 opacity-100"
+  },
+  "instructions_to_main_agent": [
+    "1. Setup 'Lato' and 'Cormorant Garamond' fonts in index.css.",
+    "2. Implement the Onboarding Flow as a multi-step form (Wizard pattern).",
+    "3. Build the Chat Interface with a fixed height container, scrollable message list, and sticky input footer.",
+    "4. Use 'lucide-react' for all icons.",
+    "5. Ensure the 'Prana' persona is consistent in UI - show avatar in header and next to guru messages.",
+    "6. For Shlokas, create a dedicated 'ShlokaCard' component that renders Sanskrit and English beautifully.",
+    "7. Admin Dashboard should be simple: Table of conversations, User details, Filter by Spiritual Path."
+  ],
+  "universal_guidelines": [
+    "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates what users call the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy",
+    "Use glass-morphism effects with backdrop filters (12-24px blur)",
+    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file. This disrupts the human natural reading flow of text",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯📚🎭🎬🎪🎉🎊🎁🎀🎂🍰🎈🎨🎰💰💵💳🏦💎🪙💸🤑📊📈📉💹🔢🏆🥇 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN",
+    "Prioritize using pre-existing components from src/components/ui when applicable",
+    "Create new components that match the style and conventions of existing components when needed",
+    "Components MUST use named exports (export const ComponentName = ...)",
+    "Pages MUST use default exports (export default function PageName() {...})",
+    "Use sonner for toasts"
+  ]
+}
