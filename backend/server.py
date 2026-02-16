@@ -206,58 +206,115 @@ You draw from all wisdom traditions naturally. Speak of the Divine, the Universe
     
     return base_prompt + alignment_prompts.get(alignment, alignment_prompts["universal"]) + f"\n\nTheir goal: {goal}. Keep this in mind but don't mention it explicitly."
 
-def find_relevant_scripture(message: str, alignment: str) -> Optional[dict]:
-    """Find a relevant scripture based on message content and user alignment"""
-    message_lower = message.lower()
+def find_relevant_scripture(user_message: str, ai_response: str, alignment: str) -> Optional[dict]:
+    """Find a relevant scripture based on AI response content and user alignment.
+    Returns None if no strong match found - we don't want to force scriptures."""
+    import random
     
+    combined_text = (user_message + " " + ai_response).lower()
+    
+    # More specific keyword mapping with weights
     keywords_map = {
-        "stress": ["detachment", "equanimity", "mind control"],
+        # Stress/Anxiety related
+        "stress": ["equanimity", "tolerance", "stillness"],
         "anxious": ["equanimity", "tolerance", "stillness"],
+        "overwhelm": ["equanimity", "tolerance"],
+        "worry": ["equanimity", "faith"],
+        
+        # Emotional states
         "lonely": ["divine presence", "devotion", "compassion"],
-        "sad": ["upliftment", "strength", "divine protection"],
+        "alone": ["divine presence", "oneness"],
+        "sad": ["upliftment", "strength", "compassion"],
+        "depress": ["upliftment", "strength"],
         "angry": ["forgiveness", "compassion", "equanimity"],
-        "confused": ["dharma", "duty", "self"],
-        "purpose": ["dharma", "duty", "action"],
-        "work": ["karma", "action", "duty", "detachment"],
         "fear": ["fearlessness", "faith", "divine protection"],
-        "love": ["devotion", "compassion", "surrender"],
-        "death": ["impermanence", "liberation", "self"],
-        "meditat": ["yoga", "mind control", "stillness"],
-        "peace": ["stillness", "equanimity", "contentment"],
+        "scared": ["fearlessness", "faith"],
+        
+        # Life situations
+        "confus": ["self", "dharma"],
+        "lost": ["self", "dharma", "duty"],
+        "purpose": ["dharma", "duty", "self"],
+        "meaning": ["dharma", "self"],
+        "work": ["action", "detachment"],
+        "job": ["action", "duty", "detachment"],
+        "career": ["duty", "action"],
+        "lazy": ["action", "duty"],
+        "motivat": ["action", "duty"],
+        
+        # Relationships
         "relationship": ["compassion", "kindness", "forgiveness"],
-        "career": ["karma", "action", "duty"],
-        "money": ["contentment", "detachment"],
-        "family": ["dharma", "compassion", "duty"]
+        "family": ["dharma", "compassion"],
+        "friend": ["compassion", "kindness"],
+        "forgive": ["forgiveness", "compassion"],
+        
+        # Spiritual themes
+        "meditat": ["yoga", "mind control", "stillness"],
+        "peace": ["stillness", "equanimity"],
+        "calm": ["stillness", "equanimity"],
+        "surrender": ["surrender", "faith", "grace"],
+        "faith": ["faith", "surrender", "devotion"],
+        "love": ["devotion", "compassion"],
+        "grace": ["grace", "surrender", "divine protection"],
+        
+        # Detachment/letting go
+        "let go": ["detachment", "surrender"],
+        "attach": ["detachment", "contentment"],
+        "outcome": ["detachment", "action"],
+        "result": ["detachment", "action"],
+        
+        # Death/impermanence
+        "death": ["impermanence", "liberation"],
+        "imperma": ["impermanence", "tolerance"],
+        "change": ["impermanence", "tolerance"],
+        
+        # Self/identity
+        "who am i": ["self"],
+        "identity": ["self"],
+        "ego": ["self", "detachment"],
     }
     
+    # Find matching themes
     relevant_themes = []
     for keyword, themes in keywords_map.items():
-        if keyword in message_lower:
+        if keyword in combined_text:
             relevant_themes.extend(themes)
     
-    # Find scriptures matching themes and alignment
+    # If no themes found, don't return any scripture
+    if not relevant_themes:
+        return None
+    
+    # Score scriptures - need minimum threshold
     scored_scriptures = []
     for scripture in SCRIPTURES:
         score = 0
-        # Check theme match
+        matched_themes = []
+        
         for theme in scripture.get("theme", []):
             if theme in relevant_themes:
                 score += 2
-        # Check alignment match
-        if alignment in scripture.get("alignment", []) or "universal" in scripture.get("alignment", []):
+                matched_themes.append(theme)
+        
+        # Alignment bonus
+        if alignment in scripture.get("alignment", []):
             score += 1
-        if score > 0:
-            scored_scriptures.append((score, scripture))
+        
+        # Only include if score is meaningful (at least 2 theme matches)
+        if score >= 4:
+            scored_scriptures.append((score, scripture, matched_themes))
     
-    if scored_scriptures:
-        scored_scriptures.sort(key=lambda x: x[0], reverse=True)
-        return scored_scriptures[0][1]
+    # If no strong matches, return None
+    if not scored_scriptures:
+        return None
     
-    # Return a default scripture if no match
-    for scripture in SCRIPTURES:
-        if alignment in scripture.get("alignment", []) or "universal" in scripture.get("alignment", []):
-            return scripture
-    return SCRIPTURES[0]
+    # Sort by score
+    scored_scriptures.sort(key=lambda x: x[0], reverse=True)
+    
+    # Get top matches (same score) and pick randomly to avoid repetition
+    top_score = scored_scriptures[0][0]
+    top_matches = [s for s in scored_scriptures if s[0] == top_score]
+    
+    selected = random.choice(top_matches)
+    return selected[1]
 
 # ============== API ROUTES ==============
 
