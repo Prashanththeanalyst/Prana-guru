@@ -719,8 +719,13 @@ class PocketGuruAPITester:
                 self.test_get_march_festivals,
                 self.test_get_today_panchang,
             ]),
-            ("Voice Features", [
+            ("Voice Features (OpenAI TTS/STT)", [
                 self.test_get_supported_languages,
+                self.test_get_available_voices,
+                self.test_text_to_speech_standard,
+                self.test_text_to_speech_hd,
+                self.test_translate_text,
+                self.test_tts_error_handling,
             ]),
             ("Admin Functions", [
                 self.test_admin_stats,
