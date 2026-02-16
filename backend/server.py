@@ -545,6 +545,462 @@ async def get_scripture(scripture_id: str):
             return scripture
     raise HTTPException(status_code=404, detail="Scripture not found")
 
+
+# ============== ASTROLOGY ROUTES ==============
+
+class KundaliRequest(BaseModel):
+    birth_date: str  # YYYY-MM-DD
+    birth_time: str  # HH:MM
+    latitude: float
+    longitude: float
+    timezone_offset: float = 5.5  # IST default
+
+class NumerologyRequest(BaseModel):
+    birth_date: str  # YYYY-MM-DD
+    name: Optional[str] = None
+
+class CompatibilityRequest(BaseModel):
+    person1_birth_date: str
+    person1_birth_time: str
+    person1_lat: float
+    person1_lon: float
+    person2_birth_date: str
+    person2_birth_time: str
+    person2_lat: float
+    person2_lon: float
+    timezone_offset: float = 5.5
+
+
+@api_router.post("/astrology/kundali")
+async def generate_kundali(request: KundaliRequest):
+    """Generate Kundali (Birth Chart)"""
+    try:
+        birth_dt = datetime.strptime(f"{request.birth_date} {request.birth_time}", "%Y-%m-%d %H:%M")
+        kundali = calculate_kundali(
+            birth_dt,
+            request.latitude,
+            request.longitude,
+            request.timezone_offset
+        )
+        return kundali
+    except Exception as e:
+        logging.error(f"Kundali error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.post("/astrology/numerology")
+async def get_numerology_report(request: NumerologyRequest):
+    """Get Numerology Analysis"""
+    try:
+        birth_dt = datetime.strptime(request.birth_date, "%Y-%m-%d")
+        numerology = get_numerology(birth_dt, request.name or "")
+        return numerology
+    except Exception as e:
+        logging.error(f"Numerology error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.post("/astrology/compatibility")
+async def check_compatibility(request: CompatibilityRequest):
+    """Check compatibility (Kundali Matching)"""
+    try:
+        # Calculate moon positions for both
+        birth1 = datetime.strptime(f"{request.person1_birth_date} {request.person1_birth_time}", "%Y-%m-%d %H:%M")
+        birth2 = datetime.strptime(f"{request.person2_birth_date} {request.person2_birth_time}", "%Y-%m-%d %H:%M")
+        
+        kundali1 = calculate_kundali(birth1, request.person1_lat, request.person1_lon, request.timezone_offset)
+        kundali2 = calculate_kundali(birth2, request.person2_lat, request.person2_lon, request.timezone_offset)
+        
+        moon1_deg = kundali1["moon"]["degree"]
+        moon2_deg = kundali2["moon"]["degree"]
+        
+        compatibility = calculate_compatibility(moon1_deg, moon2_deg)
+        
+        return {
+            "person1_kundali": kundali1,
+            "person2_kundali": kundali2,
+            "compatibility": compatibility
+        }
+    except Exception as e:
+        logging.error(f"Compatibility error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.get("/astrology/daily/{moon_rashi_index}")
+async def get_daily_rashi(moon_rashi_index: int):
+    """Get daily horoscope for a Moon sign"""
+    if moon_rashi_index < 0 or moon_rashi_index > 11:
+        raise HTTPException(status_code=400, detail="Invalid rashi index (0-11)")
+    return get_daily_horoscope(moon_rashi_index)
+
+
+@api_router.get("/astrology/rashis")
+async def list_rashis():
+    """List all Rashis"""
+    return RASHIS
+
+
+@api_router.get("/astrology/nakshatras")
+async def list_nakshatras():
+    """List all Nakshatras"""
+    return NAKSHATRAS
+
+
+# ============== VOICE/BHASHINI ROUTES ==============
+
+SUPPORTED_LANGUAGES = {
+    "en": "English",
+    "hi": "Hindi", 
+    "ta": "Tamil",
+    "te": "Telugu",
+    "mr": "Marathi",
+    "bn": "Bengali",
+    "kn": "Kannada",
+    "gu": "Gujarati",
+    "pa": "Punjabi",
+    "ml": "Malayalam"
+}
+
+class VoiceToTextRequest(BaseModel):
+    audio_base64: str
+    source_language: str = "hi"
+
+class TextToVoiceRequest(BaseModel):
+    text: str
+    target_language: str = "hi"
+    
+class TranslateRequest(BaseModel):
+    text: str
+    source_language: str = "en"
+    target_language: str = "hi"
+
+
+@api_router.get("/voice/languages")
+async def get_supported_languages():
+    """Get list of supported languages"""
+    return SUPPORTED_LANGUAGES
+
+
+@api_router.post("/voice/stt")
+async def speech_to_text(request: VoiceToTextRequest):
+    """
+    Convert speech to text using Bhashini API
+    Note: Requires BHASHINI_API_KEY to be set
+    """
+    if not BHASHINI_API_KEY:
+        # Fallback: return mock response for demo
+        return {
+            "text": "नमस्ते, मुझे आध्यात्मिक मार्गदर्शन चाहिए",
+            "language": request.source_language,
+            "note": "Demo mode - Bhashini API key not configured"
+        }
+    
+    try:
+        # Bhashini ASR Pipeline
+        config_url = "https://meity-auth.ulcacontrib.org/ulca/apis/v0/model/getModelsPipeline"
+        
+        config_payload = {
+            "pipelineTasks": [{"taskType": "asr", "config": {"language": {"sourceLanguage": request.source_language}}}],
+            "pipelineRequestConfig": {"pipelineId": "64392f96daac500b55c543cd"}
+        }
+        
+        async with httpx.AsyncClient() as client:
+            # Get pipeline config
+            config_resp = await client.post(
+                config_url,
+                json=config_payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "userID": BHASHINI_USER_ID,
+                    "ulcaApiKey": BHASHINI_API_KEY
+                }
+            )
+            config_data = config_resp.json()
+            
+            # Call inference endpoint
+            inference_url = config_data.get("pipelineInferenceAPIEndPoint", {}).get("callbackUrl")
+            inference_key = config_data.get("pipelineInferenceAPIEndPoint", {}).get("inferenceApiKey", {}).get("value")
+            
+            if inference_url:
+                inference_payload = {
+                    "pipelineTasks": [{"taskType": "asr", "config": {"language": {"sourceLanguage": request.source_language}}}],
+                    "inputData": {"audio": [{"audioContent": request.audio_base64}]}
+                }
+                
+                asr_resp = await client.post(
+                    inference_url,
+                    json=inference_payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": inference_key
+                    }
+                )
+                asr_data = asr_resp.json()
+                
+                text = asr_data.get("pipelineResponse", [{}])[0].get("output", [{}])[0].get("source", "")
+                return {"text": text, "language": request.source_language}
+        
+        return {"error": "Failed to get pipeline config"}
+    except Exception as e:
+        logging.error(f"STT Error: {e}")
+        return {"error": str(e), "text": "", "language": request.source_language}
+
+
+@api_router.post("/voice/tts")
+async def text_to_speech(request: TextToVoiceRequest):
+    """
+    Convert text to speech using Bhashini API
+    Note: Requires BHASHINI_API_KEY to be set
+    """
+    if not BHASHINI_API_KEY:
+        # Return info for demo mode
+        return {
+            "audio_base64": "",
+            "text": request.text,
+            "language": request.target_language,
+            "note": "Demo mode - Bhashini API key not configured. Use browser TTS as fallback."
+        }
+    
+    try:
+        config_url = "https://meity-auth.ulcacontrib.org/ulca/apis/v0/model/getModelsPipeline"
+        
+        config_payload = {
+            "pipelineTasks": [{"taskType": "tts", "config": {"language": {"sourceLanguage": request.target_language}}}],
+            "pipelineRequestConfig": {"pipelineId": "64392f96daac500b55c543cd"}
+        }
+        
+        async with httpx.AsyncClient() as client:
+            config_resp = await client.post(
+                config_url,
+                json=config_payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "userID": BHASHINI_USER_ID,
+                    "ulcaApiKey": BHASHINI_API_KEY
+                }
+            )
+            config_data = config_resp.json()
+            
+            inference_url = config_data.get("pipelineInferenceAPIEndPoint", {}).get("callbackUrl")
+            inference_key = config_data.get("pipelineInferenceAPIEndPoint", {}).get("inferenceApiKey", {}).get("value")
+            
+            if inference_url:
+                tts_payload = {
+                    "pipelineTasks": [{"taskType": "tts", "config": {"language": {"sourceLanguage": request.target_language}, "gender": "female"}}],
+                    "inputData": {"input": [{"source": request.text}]}
+                }
+                
+                tts_resp = await client.post(
+                    inference_url,
+                    json=tts_payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": inference_key
+                    }
+                )
+                tts_data = tts_resp.json()
+                
+                audio = tts_data.get("pipelineResponse", [{}])[0].get("audio", [{}])[0].get("audioContent", "")
+                return {"audio_base64": audio, "text": request.text, "language": request.target_language}
+        
+        return {"error": "Failed to get pipeline config"}
+    except Exception as e:
+        logging.error(f"TTS Error: {e}")
+        return {"error": str(e), "audio_base64": "", "language": request.target_language}
+
+
+@api_router.post("/voice/translate")
+async def translate_text(request: TranslateRequest):
+    """Translate text between languages"""
+    if not BHASHINI_API_KEY:
+        return {
+            "original": request.text,
+            "translated": request.text,  # Return original in demo mode
+            "source_language": request.source_language,
+            "target_language": request.target_language,
+            "note": "Demo mode - Bhashini API key not configured"
+        }
+    
+    try:
+        config_url = "https://meity-auth.ulcacontrib.org/ulca/apis/v0/model/getModelsPipeline"
+        
+        config_payload = {
+            "pipelineTasks": [{"taskType": "translation", "config": {"language": {"sourceLanguage": request.source_language, "targetLanguage": request.target_language}}}],
+            "pipelineRequestConfig": {"pipelineId": "64392f96daac500b55c543cd"}
+        }
+        
+        async with httpx.AsyncClient() as client:
+            config_resp = await client.post(
+                config_url,
+                json=config_payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "userID": BHASHINI_USER_ID,
+                    "ulcaApiKey": BHASHINI_API_KEY
+                }
+            )
+            config_data = config_resp.json()
+            
+            inference_url = config_data.get("pipelineInferenceAPIEndPoint", {}).get("callbackUrl")
+            inference_key = config_data.get("pipelineInferenceAPIEndPoint", {}).get("inferenceApiKey", {}).get("value")
+            
+            if inference_url:
+                translate_payload = {
+                    "pipelineTasks": [{"taskType": "translation", "config": {"language": {"sourceLanguage": request.source_language, "targetLanguage": request.target_language}}}],
+                    "inputData": {"input": [{"source": request.text}]}
+                }
+                
+                trans_resp = await client.post(
+                    inference_url,
+                    json=translate_payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": inference_key
+                    }
+                )
+                trans_data = trans_resp.json()
+                
+                translated = trans_data.get("pipelineResponse", [{}])[0].get("output", [{}])[0].get("target", "")
+                return {
+                    "original": request.text,
+                    "translated": translated,
+                    "source_language": request.source_language,
+                    "target_language": request.target_language
+                }
+        
+        return {"error": "Failed to get pipeline config"}
+    except Exception as e:
+        logging.error(f"Translation Error: {e}")
+        return {"error": str(e)}
+
+
+# ============== MEDITATION ROUTES ==============
+
+MEDITATION_SESSIONS = [
+    {
+        "id": "peace-5min",
+        "name": "Shanti Dhyana",
+        "name_hi": "शांति ध्यान",
+        "duration_minutes": 5,
+        "category": "peace",
+        "description": "A short meditation for inner peace and calm",
+        "suitable_for": ["stress", "anxiety", "beginners"]
+    },
+    {
+        "id": "morning-10min",
+        "name": "Pratah Dhyana",
+        "name_hi": "प्रातः ध्यान",
+        "duration_minutes": 10,
+        "category": "morning",
+        "description": "Start your day with clarity and intention",
+        "suitable_for": ["morning", "energy", "focus"]
+    },
+    {
+        "id": "sleep-15min",
+        "name": "Nidra Dhyana",
+        "name_hi": "निद्रा ध्यान",
+        "duration_minutes": 15,
+        "category": "sleep",
+        "description": "Gentle meditation for restful sleep",
+        "suitable_for": ["insomnia", "relaxation", "night"]
+    },
+    {
+        "id": "breath-10min",
+        "name": "Pranayama",
+        "name_hi": "प्राणायाम",
+        "duration_minutes": 10,
+        "category": "breath",
+        "description": "Breathing exercises for vital energy",
+        "suitable_for": ["energy", "focus", "health"]
+    },
+    {
+        "id": "gratitude-5min",
+        "name": "Kritagyata Dhyana",
+        "name_hi": "कृतज्ञता ध्यान",
+        "duration_minutes": 5,
+        "category": "gratitude",
+        "description": "Cultivate gratitude and positivity",
+        "suitable_for": ["depression", "negativity", "morning"]
+    }
+]
+
+FESTIVALS_2026 = [
+    {"date": "2026-01-14", "name": "Makar Sankranti", "name_hi": "मकर संक्रांति", "type": "major"},
+    {"date": "2026-01-26", "name": "Basant Panchami", "name_hi": "बसंत पंचमी", "type": "festival"},
+    {"date": "2026-02-26", "name": "Maha Shivaratri", "name_hi": "महा शिवरात्रि", "type": "major"},
+    {"date": "2026-03-14", "name": "Holi", "name_hi": "होली", "type": "major"},
+    {"date": "2026-03-30", "name": "Ugadi/Gudi Padwa", "name_hi": "उगादि/गुड़ी पड़वा", "type": "new_year"},
+    {"date": "2026-04-02", "name": "Ram Navami", "name_hi": "राम नवमी", "type": "major"},
+    {"date": "2026-04-14", "name": "Baisakhi", "name_hi": "बैसाखी", "type": "regional"},
+    {"date": "2026-05-07", "name": "Buddha Purnima", "name_hi": "बुद्ध पूर्णिमा", "type": "major"},
+    {"date": "2026-07-07", "name": "Guru Purnima", "name_hi": "गुरु पूर्णिमा", "type": "major"},
+    {"date": "2026-08-11", "name": "Raksha Bandhan", "name_hi": "रक्षा बंधन", "type": "major"},
+    {"date": "2026-08-19", "name": "Janmashtami", "name_hi": "जन्माष्टमी", "type": "major"},
+    {"date": "2026-08-27", "name": "Ganesh Chaturthi", "name_hi": "गणेश चतुर्थी", "type": "major"},
+    {"date": "2026-09-29", "name": "Navratri Begins", "name_hi": "नवरात्रि प्रारंभ", "type": "major"},
+    {"date": "2026-10-08", "name": "Dussehra", "name_hi": "दशहरा", "type": "major"},
+    {"date": "2026-10-20", "name": "Karwa Chauth", "name_hi": "करवा चौथ", "type": "festival"},
+    {"date": "2026-10-29", "name": "Diwali", "name_hi": "दीवाली", "type": "major"},
+    {"date": "2026-11-15", "name": "Guru Nanak Jayanti", "name_hi": "गुरु नानक जयंती", "type": "major"},
+]
+
+
+@api_router.get("/meditation/sessions")
+async def get_meditation_sessions(category: Optional[str] = None):
+    """Get available meditation sessions"""
+    if category:
+        return [s for s in MEDITATION_SESSIONS if s["category"] == category]
+    return MEDITATION_SESSIONS
+
+
+@api_router.get("/meditation/recommend/{mood}")
+async def recommend_meditation(mood: str):
+    """Recommend meditation based on mood"""
+    mood_lower = mood.lower()
+    recommendations = []
+    
+    for session in MEDITATION_SESSIONS:
+        if any(mood_lower in tag for tag in session["suitable_for"]):
+            recommendations.append(session)
+    
+    if not recommendations:
+        # Default recommendation
+        recommendations = [MEDITATION_SESSIONS[0]]
+    
+    return {"mood": mood, "recommendations": recommendations}
+
+
+@api_router.get("/calendar/festivals")
+async def get_festivals(month: Optional[int] = None):
+    """Get upcoming festivals"""
+    if month:
+        return [f for f in FESTIVALS_2026 if int(f["date"].split("-")[1]) == month]
+    return FESTIVALS_2026
+
+
+@api_router.get("/calendar/today")
+async def get_today_info():
+    """Get today's spiritual info"""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    
+    # Check for festivals
+    today_festivals = [f for f in FESTIVALS_2026 if f["date"] == today]
+    
+    # Tithi calculation (simplified)
+    day_of_lunar_month = datetime.now().day % 15
+    tithis = ["Pratipada", "Dwitiya", "Tritiya", "Chaturthi", "Panchami", 
+              "Shashthi", "Saptami", "Ashtami", "Navami", "Dashami",
+              "Ekadashi", "Dwadashi", "Trayodashi", "Chaturdashi", "Purnima/Amavasya"]
+    
+    return {
+        "date": today,
+        "tithi": tithis[day_of_lunar_month],
+        "festivals": today_festivals,
+        "auspicious_time": "06:00-08:00 (Brahma Muhurta)",
+        "inauspicious_time": "12:00-13:30 (Rahu Kaal - varies by day)"
+    }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
