@@ -20,7 +20,7 @@ Build "Prana Guru" - a full-featured spiritual companion mobile app with:
 - **Web App**: React + Tailwind CSS + FastAPI + MongoDB
 - **Mobile App**: React Native (iOS & Android)
 - **AI**: Gemini 3 Flash via Emergent LLM Key
-- **Voice**: Bhashini API (STT/TTS for Indian languages)
+- **Voice**: OpenAI Whisper (STT) + OpenAI TTS (using Emergent LLM Key)
 - **Astrology**: In-house Vedic calculations
 
 ## What's Been Implemented (Feb 2026)
