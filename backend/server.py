@@ -386,22 +386,14 @@ async def chat(request: ChatRequest):
     user_msg_dict = user_msg.model_dump()
     user_msg_dict['timestamp'] = user_msg_dict['timestamp'].isoformat()
     
-    # Find relevant scripture
-    scripture = find_relevant_scripture(request.message, user.get('alignment', 'universal'))
-    
-    # Build context for AI
+    # Build context for AI (no scripture injection - let AI respond naturally first)
     system_prompt = get_system_prompt(user)
-    
-    # Add scripture context
-    scripture_context = ""
-    if scripture:
-        scripture_context = f"\n\nRELEVANT SCRIPTURE (use if appropriate):\nSource: {scripture['source']}\nSanskrit: {scripture['sanskrit']}\nTranslation: {scripture['translation']}"
     
     # Initialize Gemini chat
     chat_instance = LlmChat(
         api_key=EMERGENT_LLM_KEY,
         session_id=f"prana-{request.user_id}-{conv['id']}",
-        system_message=system_prompt + scripture_context
+        system_message=system_prompt
     ).with_model("gemini", "gemini-3-flash-preview")
     
     # Get conversation history for context
@@ -424,14 +416,21 @@ async def chat(request: ChatRequest):
         response_text = await chat_instance.send_message(user_message)
     except Exception as e:
         logging.error(f"AI Error: {e}")
-        response_text = "Namaste. I am experiencing some difficulty at the moment. Please try again, and remember - in moments of pause, we find stillness. 🙏"
+        response_text = "Namaste. I am experiencing some difficulty at the moment. Please try again, and remember - in moments of pause, we find stillness."
+    
+    # NOW find relevant scripture based on BOTH user message and AI response
+    scripture = find_relevant_scripture(
+        request.message, 
+        response_text, 
+        user.get('alignment', 'universal')
+    )
     
     # Create guru response message
     guru_msg = Message(
         user_id=request.user_id,
         role="guru",
         content=response_text,
-        shloka=scripture if scripture else None
+        shloka=scripture  # Will be None if no strong match
     )
     guru_msg_dict = guru_msg.model_dump()
     guru_msg_dict['timestamp'] = guru_msg_dict['timestamp'].isoformat()
