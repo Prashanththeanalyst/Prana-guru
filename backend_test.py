@@ -282,6 +282,258 @@ class PocketGuruAPITester:
             
         return success
 
+    # ============== ASTROLOGY TESTS ==============
+    
+    def test_generate_kundali(self):
+        """Test Kundali generation"""
+        kundali_data = {
+            "birth_date": "1995-07-15",
+            "birth_time": "10:30",
+            "latitude": 28.6139,
+            "longitude": 77.2090,
+            "timezone_offset": 5.5
+        }
+        
+        success, response = self.run_test(
+            "Generate Kundali",
+            "POST",
+            "astrology/kundali",
+            200,
+            data=kundali_data
+        )
+        
+        if success:
+            expected_keys = ['birth_details', 'lagna', 'sun', 'moon', 'houses', 'ayanamsa']
+            for key in expected_keys:
+                if key not in response:
+                    self.log_test(f"Kundali - Missing {key}", False, f"Response missing {key}")
+                    return False
+            print(f"   Generated Kundali for {response.get('birth_details', {}).get('date', 'N/A')}")
+            
+        return success
+    
+    def test_get_numerology(self):
+        """Test numerology analysis"""
+        numerology_data = {
+            "birth_date": "1995-07-15",
+            "name": "Test User"
+        }
+        
+        success, response = self.run_test(
+            "Get Numerology",
+            "POST",
+            "astrology/numerology",
+            200,
+            data=numerology_data
+        )
+        
+        if success:
+            expected_keys = ['psychic_number', 'destiny_number', 'name_number']
+            for key in expected_keys:
+                if key not in response:
+                    print(f"   Warning: Missing {key} in numerology response")
+            print(f"   Psychic Number: {response.get('psychic_number', {}).get('number', 'N/A')}")
+            print(f"   Destiny Number: {response.get('destiny_number', {}).get('number', 'N/A')}")
+            
+        return success
+    
+    def test_check_compatibility(self):
+        """Test compatibility matching"""
+        compatibility_data = {
+            "person1_birth_date": "1995-07-15",
+            "person1_birth_time": "10:30",
+            "person1_lat": 28.6139,
+            "person1_lon": 77.2090,
+            "person2_birth_date": "1996-03-20",
+            "person2_birth_time": "14:45",
+            "person2_lat": 19.0760,
+            "person2_lon": 72.8777,
+            "timezone_offset": 5.5
+        }
+        
+        success, response = self.run_test(
+            "Check Compatibility",
+            "POST",
+            "astrology/compatibility",
+            200,
+            data=compatibility_data
+        )
+        
+        if success:
+            expected_keys = ['person1_kundali', 'person2_kundali', 'compatibility']
+            for key in expected_keys:
+                if key not in response:
+                    self.log_test(f"Compatibility - Missing {key}", False, f"Response missing {key}")
+                    return False
+            compatibility_score = response.get('compatibility', {}).get('percentage', 0)
+            print(f"   Compatibility Score: {compatibility_score}%")
+            
+        return success
+    
+    def test_get_daily_horoscope(self):
+        """Test daily horoscope for Aries (index 0)"""
+        success, response = self.run_test(
+            "Get Daily Horoscope - Aries",
+            "GET",
+            "astrology/daily/0",
+            200
+        )
+        
+        if success:
+            expected_keys = ['rashi', 'date', 'themes', 'lucky_numbers', 'lucky_colors']
+            for key in expected_keys:
+                if key not in response:
+                    self.log_test(f"Daily Horoscope - Missing {key}", False, f"Response missing {key}")
+                    return False
+            print(f"   Horoscope for {response.get('rashi', {}).get('name', 'N/A')} on {response.get('date', 'N/A')}")
+            
+        return success
+    
+    def test_get_rashis(self):
+        """Test getting all rashis"""
+        success, response = self.run_test(
+            "Get All Rashis",
+            "GET",
+            "astrology/rashis",
+            200
+        )
+        
+        if success:
+            rashis = response if isinstance(response, list) else []
+            print(f"   Found {len(rashis)} rashis")
+            if len(rashis) != 12:
+                self.log_test("Rashis Count", False, f"Expected 12 rashis, got {len(rashis)}")
+                return False
+            
+        return success
+    
+    def test_get_nakshatras(self):
+        """Test getting all nakshatras"""
+        success, response = self.run_test(
+            "Get All Nakshatras",
+            "GET",
+            "astrology/nakshatras",
+            200
+        )
+        
+        if success:
+            nakshatras = response if isinstance(response, list) else []
+            print(f"   Found {len(nakshatras)} nakshatras")
+            if len(nakshatras) != 27:
+                self.log_test("Nakshatras Count", False, f"Expected 27 nakshatras, got {len(nakshatras)}")
+                return False
+            
+        return success
+
+    # ============== MEDITATION TESTS ==============
+    
+    def test_get_meditation_sessions(self):
+        """Test getting meditation sessions"""
+        success, response = self.run_test(
+            "Get Meditation Sessions",
+            "GET",
+            "meditation/sessions",
+            200
+        )
+        
+        if success:
+            sessions = response if isinstance(response, list) else []
+            print(f"   Found {len(sessions)} meditation sessions")
+            
+        return success
+    
+    def test_recommend_meditation_for_stress(self):
+        """Test meditation recommendation for stress"""
+        success, response = self.run_test(
+            "Recommend Meditation - Stress",
+            "GET",
+            "meditation/recommend/stress",
+            200
+        )
+        
+        if success:
+            expected_keys = ['mood', 'recommendations']
+            for key in expected_keys:
+                if key not in response:
+                    self.log_test(f"Meditation Recommendation - Missing {key}", False, f"Response missing {key}")
+                    return False
+            recommendations = response.get('recommendations', [])
+            print(f"   Found {len(recommendations)} recommendations for stress")
+            
+        return success
+
+    # ============== CALENDAR TESTS ==============
+    
+    def test_get_all_festivals(self):
+        """Test getting all festivals"""
+        success, response = self.run_test(
+            "Get All Festivals",
+            "GET",
+            "calendar/festivals",
+            200
+        )
+        
+        if success:
+            festivals = response if isinstance(response, list) else []
+            print(f"   Found {len(festivals)} festivals")
+            
+        return success
+    
+    def test_get_march_festivals(self):
+        """Test getting March festivals"""
+        success, response = self.run_test(
+            "Get March Festivals",
+            "GET",
+            "calendar/festivals?month=3",
+            200
+        )
+        
+        if success:
+            festivals = response if isinstance(response, list) else []
+            print(f"   Found {len(festivals)} festivals in March")
+            
+        return success
+    
+    def test_get_today_panchang(self):
+        """Test getting today's panchang info"""
+        success, response = self.run_test(
+            "Get Today's Panchang",
+            "GET",
+            "calendar/today",
+            200
+        )
+        
+        if success:
+            expected_keys = ['date', 'tithi', 'festivals', 'auspicious_time', 'inauspicious_time']
+            for key in expected_keys:
+                if key not in response:
+                    self.log_test(f"Today's Panchang - Missing {key}", False, f"Response missing {key}")
+                    return False
+            print(f"   Today's tithi: {response.get('tithi', 'N/A')}")
+            
+        return success
+
+    # ============== VOICE/BHASHINI TESTS ==============
+    
+    def test_get_supported_languages(self):
+        """Test getting supported languages for voice"""
+        success, response = self.run_test(
+            "Get Supported Languages",
+            "GET",
+            "voice/languages",
+            200
+        )
+        
+        if success:
+            languages = response if isinstance(response, dict) else {}
+            print(f"   Found {len(languages)} supported languages")
+            expected_languages = ['en', 'hi', 'ta', 'te', 'mr', 'bn', 'kn']
+            for lang in expected_languages:
+                if lang not in languages:
+                    print(f"   Warning: Missing expected language {lang}")
+            
+        return success
+
     def run_all_tests(self):
         """Run all tests in sequence"""
         print("🚀 Starting Pocket Guru Backend API Tests")
