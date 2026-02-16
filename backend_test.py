@@ -536,11 +536,11 @@ class PocketGuruAPITester:
 
     def run_all_tests(self):
         """Run all tests in sequence"""
-        print("🚀 Starting Pocket Guru Backend API Tests")
+        print("🚀 Starting Prana Guru (Updated) Backend API Tests")
         print(f"📍 Base URL: {self.base_url}")
         print("=" * 60)
         
-        # Test sequence
+        # Test sequence - Updated with new astrology, meditation, calendar and voice endpoints
         tests = [
             ("Basic Tests", [
                 self.test_root_endpoint,
@@ -556,6 +556,26 @@ class PocketGuruAPITester:
                 self.test_chat_continuation,
                 self.test_get_user_conversations,
                 self.test_get_single_conversation,
+            ]),
+            ("Astrology Features", [
+                self.test_generate_kundali,
+                self.test_get_numerology,
+                self.test_check_compatibility,
+                self.test_get_daily_horoscope,
+                self.test_get_rashis,
+                self.test_get_nakshatras,
+            ]),
+            ("Meditation Features", [
+                self.test_get_meditation_sessions,
+                self.test_recommend_meditation_for_stress,
+            ]),
+            ("Calendar Features", [
+                self.test_get_all_festivals,
+                self.test_get_march_festivals,
+                self.test_get_today_panchang,
+            ]),
+            ("Voice Features", [
+                self.test_get_supported_languages,
             ]),
             ("Admin Functions", [
                 self.test_admin_stats,
