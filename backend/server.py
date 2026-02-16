@@ -4,12 +4,20 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import httpx
+import base64
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+
+# Import astrology module
+from astrology import (
+    calculate_kundali, get_numerology, calculate_compatibility,
+    get_daily_horoscope, get_rashi, get_nakshatra, RASHIS, NAKSHATRAS
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -22,8 +30,12 @@ db = client[os.environ['DB_NAME']]
 # Emergent LLM Key
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 
+# Bhashini API Configuration
+BHASHINI_API_KEY = os.environ.get('BHASHINI_API_KEY', '')
+BHASHINI_USER_ID = os.environ.get('BHASHINI_USER_ID', '')
+
 # Create the main app without a prefix
-app = FastAPI()
+app = FastAPI(title="Prana Guru API", description="Spiritual Companion & Vedic Astrology API")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -37,6 +49,12 @@ class UserProfile(BaseModel):
     preferred_deity: Optional[str] = None
     primary_goal: Optional[str] = None
     name: Optional[str] = None
+    preferred_language: str = Field(default="en")  # en, hi, ta, te, mr, bn, kn
+    birth_date: Optional[str] = None
+    birth_time: Optional[str] = None
+    birth_place: Optional[str] = None
+    birth_lat: Optional[float] = None
+    birth_lon: Optional[float] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     onboarding_complete: bool = False
 
@@ -45,6 +63,12 @@ class UserProfileCreate(BaseModel):
     preferred_deity: Optional[str] = None
     primary_goal: Optional[str] = None
     name: Optional[str] = None
+    preferred_language: str = "en"
+    birth_date: Optional[str] = None
+    birth_time: Optional[str] = None
+    birth_place: Optional[str] = None
+    birth_lat: Optional[float] = None
+    birth_lon: Optional[float] = None
 
 class Message(BaseModel):
     model_config = ConfigDict(extra="ignore")
