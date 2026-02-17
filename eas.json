@@ -1,12 +1,12 @@
 {
   "cli": {
-    "version": ">= 8.0.0"
+    "version": ">= 8.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
-    "development": {
+    "production": {
+      "credentialsSource": "remote",
       "corepack": true,
-      "developmentClient": true,
-      "distribution": "internal",
       "android": {
         "buildType": "apk"
       },
@@ -23,15 +23,9 @@
       "env": {
         "EAS_NO_FROZEN_LOCKFILE": "1"
       }
-    },
-    "production": {
-      "corepack": true,
-      "android": {
-        "buildType": "app-bundle"
-      },
-      "env": {
-        "EAS_NO_FROZEN_LOCKFILE": "1"
-      }
+    }
+  }
+}
     }
   },
   "submit": {
