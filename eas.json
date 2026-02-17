@@ -9,6 +9,9 @@
       "android": {
         "buildType": "apk",
         "image": "latest"
+      },
+      "env": {
+        "EAS_NO_FROZEN_LOCKFILE": "1"
       }
     },
     "preview": {
@@ -16,11 +19,17 @@
       "android": {
         "buildType": "apk",
         "image": "latest"
+      },
+      "env": {
+        "EAS_NO_FROZEN_LOCKFILE": "1"
       }
     },
     "production": {
       "android": {
         "image": "latest"
+      },
+      "env": {
+        "EAS_NO_FROZEN_LOCKFILE": "1"
       }
     }
   },
