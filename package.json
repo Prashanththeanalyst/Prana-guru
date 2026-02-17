@@ -6,8 +6,7 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web",
-    "eas-build-pre-install": "corepack enable && yarn set version 3.6.4"
+    "web": "expo start --web"
   },
   "dependencies": {
     "expo": "~52.0.0",
