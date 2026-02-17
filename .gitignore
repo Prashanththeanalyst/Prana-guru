@@ -30,10 +30,14 @@ next-env.d.ts
 dist/
 dist
 
-# Environment files (comprehensive coverage)
+# Expo
+.expo/
+expo-cache/
 
-*token.json*
-*credentials.json*
+# Environment files
+*.env
+*.env.local
+*.env.*.local
 
 # Logs and debug files
 npm-debug.log*
@@ -75,25 +79,3 @@ agenthub/agents/youtube/db
 
 # Build caches
 .cache/
-
-# Mobile development
-android-sdk/ -e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
