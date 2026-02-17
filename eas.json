@@ -8,8 +8,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "android": {
-        "buildType": "apk",
-        "image": "latest"
+        "buildType": "apk"
       },
       "env": {
         "EAS_NO_FROZEN_LOCKFILE": "1"
@@ -19,8 +18,7 @@
       "corepack": true,
       "distribution": "internal",
       "android": {
-        "buildType": "apk",
-        "image": "latest"
+        "buildType": "apk"
       },
       "env": {
         "EAS_NO_FROZEN_LOCKFILE": "1"
@@ -29,7 +27,7 @@
     "production": {
       "corepack": true,
       "android": {
-        "image": "latest"
+        "buildType": "app-bundle"
       },
       "env": {
         "EAS_NO_FROZEN_LOCKFILE": "1"
