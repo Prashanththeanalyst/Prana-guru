@@ -1,16 +1,1 @@
-{
-  "build": {
-    "preview": {
-      "android": {
-        "buildType": "apk",
-        "image": "latest"
-      },
-      "distribution": "internal"
-    },
-    "production": {
-      "android": {
-        "image": "latest"
-      }
-    }
-  }
-}
+{\n  "cli": {\n    "version": ">= 8.0.0"\n  },\n  "build": {\n    "development": {\n      "developmentClient": true,\n      "distribution": "internal",\n      "android": {\n        "buildType": "apk",\n        "image": "latest"\n      }\n    },\n    "preview": {\n      "distribution": "internal",\n      "android": {\n        "buildType": "apk",\n        "image": "latest"\n      }\n    },\n    "production": {\n      "android": {\n        "image": "latest"\n      }\n    }\n  },\n  "submit": {\n    "production": {}\n  }\n}
