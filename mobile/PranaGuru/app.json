@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Prana Guru",
+    "slug": "prana-guru",
+    "owner": "prashanthgowdas-organization",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "pranaguru",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pranaguru.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#075E54"
+      },
+      "package": "com.pranaguru.app"
+    },
+    "plugins": ["expo-router"],
+    "extra": {
+      "eas": {
+        "projectId": "d66c333a-0595-4645-90ab-dc4efbc56861"
+      },
+      "backendUrl": "https://prana-guru-preview.preview.emergentagent.com"
+    }
+  }
+}

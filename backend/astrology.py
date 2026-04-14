@@ -299,44 +299,147 @@ def calculate_name_number(name: str) -> int:
 
 
 NUMEROLOGY_MEANINGS = {
-    1: {"planet": "Sun", "traits": "Leadership, independence, ambition", "lucky_day": "Sunday"},
-    2: {"planet": "Moon", "traits": "Intuitive, diplomatic, sensitive", "lucky_day": "Monday"},
-    3: {"planet": "Jupiter", "traits": "Creative, optimistic, expressive", "lucky_day": "Thursday"},
-    4: {"planet": "Rahu", "traits": "Practical, disciplined, hardworking", "lucky_day": "Sunday"},
-    5: {"planet": "Mercury", "traits": "Versatile, adventurous, freedom-loving", "lucky_day": "Wednesday"},
-    6: {"planet": "Venus", "traits": "Loving, nurturing, artistic", "lucky_day": "Friday"},
-    7: {"planet": "Ketu", "traits": "Spiritual, analytical, introspective", "lucky_day": "Monday"},
-    8: {"planet": "Saturn", "traits": "Ambitious, authoritative, material success", "lucky_day": "Saturday"},
-    9: {"planet": "Mars", "traits": "Courageous, energetic, humanitarian", "lucky_day": "Tuesday"}
+    1: {
+        "planet": "Sun", "traits": "Leadership, independence, ambition",
+        "lucky_day": "Sunday", "lucky_color": "Gold/Orange",
+        "spiritual_lesson": "Learn to lead without ego; true leadership is service.",
+    },
+    2: {
+        "planet": "Moon", "traits": "Intuitive, diplomatic, sensitive",
+        "lucky_day": "Monday", "lucky_color": "White/Silver",
+        "spiritual_lesson": "Balance giving with receiving; honour your own emotional needs.",
+    },
+    3: {
+        "planet": "Jupiter", "traits": "Creative, optimistic, expressive",
+        "lucky_day": "Thursday", "lucky_color": "Yellow/Purple",
+        "spiritual_lesson": "Channel creative gifts toward upliftment, not mere entertainment.",
+    },
+    4: {
+        "planet": "Rahu", "traits": "Practical, disciplined, hardworking",
+        "lucky_day": "Sunday", "lucky_color": "Blue/Grey",
+        "spiritual_lesson": "Build solid foundations; stability is a form of dharma.",
+    },
+    5: {
+        "planet": "Mercury", "traits": "Versatile, adventurous, freedom-loving",
+        "lucky_day": "Wednesday", "lucky_color": "Green/Turquoise",
+        "spiritual_lesson": "True freedom comes from mastery of the mind, not endless novelty.",
+    },
+    6: {
+        "planet": "Venus", "traits": "Loving, nurturing, artistic",
+        "lucky_day": "Friday", "lucky_color": "Pink/Indigo",
+        "spiritual_lesson": "Love unconditionally without losing yourself in others.",
+    },
+    7: {
+        "planet": "Ketu", "traits": "Spiritual, analytical, introspective",
+        "lucky_day": "Monday", "lucky_color": "Violet/Grey",
+        "spiritual_lesson": "Seek inner truth; wisdom comes from stillness, not accumulation.",
+    },
+    8: {
+        "planet": "Saturn", "traits": "Ambitious, authoritative, material success",
+        "lucky_day": "Saturday", "lucky_color": "Black/Dark Blue",
+        "spiritual_lesson": "Use power responsibly; karma returns to the generous and the just.",
+    },
+    9: {
+        "planet": "Mars", "traits": "Courageous, energetic, humanitarian",
+        "lucky_day": "Tuesday", "lucky_color": "Red/Crimson",
+        "spiritual_lesson": "Serve humanity selflessly; your highest purpose is universal love.",
+    },
 }
+
+# Karmic debt numbers: raw sums before reduction that carry unresolved past-life lessons
+KARMIC_DEBT_NUMBERS = {
+    13: "Karmic debt of laziness and misuse of creative energy. Lesson: disciplined, focused effort.",
+    14: "Karmic debt of overindulgence and abuse of freedom. Lesson: moderation and commitment.",
+    16: "Karmic debt of fallen ego and betrayal. Lesson: humility and spiritual transformation.",
+    19: "Karmic debt of self-absorption and misuse of power. Lesson: cooperation and service.",
+}
+
+# Chaldean vowel values for Soul Urge number
+_CHALDEAN_VOWELS = {'a': 1, 'e': 5, 'i': 1, 'o': 7, 'u': 6}
+
+
+def calculate_soul_urge_number(name: str) -> int:
+    """Calculate Soul Urge (Heart's Desire) number from vowels using Chaldean system."""
+    if not name:
+        return 0
+    total = sum(_CHALDEAN_VOWELS.get(c.lower(), 0) for c in name if c.isalpha())
+    while total > 9:
+        total = sum(int(d) for d in str(total))
+    return total if total > 0 else 9
+
+
+def _get_karmic_debt(raw_sum: int) -> Optional[str]:
+    """Return karmic debt description if the raw sum is a karmic debt number."""
+    return KARMIC_DEBT_NUMBERS.get(raw_sum)
+
+
+def _raw_destiny_sum(birth_date: datetime) -> int:
+    """Return the un-reduced destiny digit sum (to check for karmic debt)."""
+    total = 0
+    for ch in f"{birth_date.day:02d}{birth_date.month:02d}{birth_date.year}":
+        total += int(ch)
+    return total
 
 
 def get_numerology(birth_date: datetime, name: str = "") -> Dict:
-    """Get complete numerology analysis"""
+    """Get comprehensive Vedic numerology analysis."""
     psychic = calculate_psychic_number(birth_date.day)
     destiny = calculate_destiny_number(birth_date)
     name_num = calculate_name_number(name) if name else None
-    
+    soul_urge = calculate_soul_urge_number(name) if name else None
+
+    # Check karmic debt on psychic (day) and destiny (full date)
+    raw_day = birth_date.day  # psychic debt: day sum before reduction
+    raw_destiny = _raw_destiny_sum(birth_date)
+
+    psychic_debt = _get_karmic_debt(raw_day)
+    destiny_debt = _get_karmic_debt(raw_destiny)
+
     result = {
         "psychic_number": {
             "number": psychic,
             **NUMEROLOGY_MEANINGS[psychic],
-            "description": "Reveals your inner self and how you see yourself"
+            "description": "Reveals your inner self, innate personality and self-perception.",
+            "karmic_debt": psychic_debt,
         },
         "destiny_number": {
             "number": destiny,
             **NUMEROLOGY_MEANINGS[destiny],
-            "description": "Reveals your life path and what you're destined to achieve"
-        }
+            "description": "Reveals your life path and the lessons you are here to master.",
+            "karmic_debt": destiny_debt,
+        },
     }
-    
+
     if name_num:
-        result["name_number"] = {
+        result["expression_number"] = {
             "number": name_num,
             **NUMEROLOGY_MEANINGS[name_num],
-            "description": "Reveals how others perceive you"
+            "description": "Reveals your natural abilities and how others perceive you.",
+            "karmic_debt": None,
         }
-    
+
+    if soul_urge:
+        result["soul_urge_number"] = {
+            "number": soul_urge,
+            **NUMEROLOGY_MEANINGS[soul_urge],
+            "description": "Reveals your deepest inner desires and what truly motivates your soul.",
+            "karmic_debt": None,
+        }
+
+    # Lucky year based on current year + personal year cycle
+    current_year = datetime.now().year
+    personal_year_raw = birth_date.day + birth_date.month + current_year
+    personal_year = personal_year_raw
+    while personal_year > 9:
+        personal_year = sum(int(d) for d in str(personal_year))
+
+    result["personal_year"] = {
+        "year": current_year,
+        "number": personal_year,
+        "theme": NUMEROLOGY_MEANINGS[personal_year]["traits"],
+        "description": f"Your {current_year} personal year vibration — the energy shaping this chapter of your life.",
+    }
+
     return result
 
 

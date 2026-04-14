@@ -113,15 +113,22 @@ export default function OnboardingPage() {
         alignment: formData.alignment,
         preferred_deity: formData.preferred_deity || null,
         primary_goal: formData.primary_goal,
-        name: formData.name || null
+        name: formData.name || null,
       });
-      
+
       localStorage.setItem("pocketGuruUserId", response.data.id);
-      toast.success("Namaste! Welcome to your spiritual journey 🙏");
+      toast.success("Namaste! Welcome to your spiritual journey");
       navigate("/chat");
     } catch (error) {
-      console.error("Error creating user:", error);
-      toast.error("Something went wrong. Please try again.");
+      if (error.response?.status === 429) {
+        toast.error("Too many requests. Please wait a moment and try again.");
+      } else if (error.response?.status >= 500) {
+        toast.error("Server error. Please try again in a few moments.");
+      } else if (!error.response) {
+        toast.error("Unable to connect. Please check your internet connection.");
+      } else {
+        toast.error("Something went wrong. Please try again.");
+      }
     } finally {
       setLoading(false);
     }

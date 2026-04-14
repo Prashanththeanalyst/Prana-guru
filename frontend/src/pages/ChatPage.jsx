@@ -80,7 +80,13 @@ export default function ChatPage() {
       const response = await axios.get(`${API}/users/${uid}`);
       setUser(response.data);
     } catch (error) {
-      console.error("Error fetching user:", error);
+      if (error.response?.status === 404) {
+        // User profile missing — send back to onboarding
+        localStorage.removeItem("pocketGuruUserId");
+        navigate("/onboarding");
+      } else {
+        toast.error("Could not load your profile. Please refresh.");
+      }
     }
   };
 
@@ -89,7 +95,10 @@ export default function ChatPage() {
       const response = await axios.get(`${API}/conversations/${uid}`);
       setConversations(response.data);
     } catch (error) {
-      console.error("Error fetching conversations:", error);
+      if (!error.response) {
+        toast.error("Connection error. Please check your internet.");
+      }
+      // Non-fatal — sidebar simply stays empty
     }
   };
 
@@ -98,7 +107,12 @@ export default function ChatPage() {
       const response = await axios.get(`${API}/conversation/${convId}`);
       setMessages(response.data.messages || []);
     } catch (error) {
-      console.error("Error fetching conversation:", error);
+      if (error.response?.status === 404) {
+        toast.error("Conversation not found. Starting a new one.");
+        navigate("/chat", { replace: true });
+      } else {
+        toast.error("Could not load conversation. Please try again.");
+      }
     }
   };
 

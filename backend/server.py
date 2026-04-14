@@ -1,7 +1,13 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Depends, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from jose import jwt, JWTError
+from passlib.context import CryptContext
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import os
 import logging
 import httpx
@@ -10,14 +16,15 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from emergentintegrations.llm.openai import OpenAISpeechToText, OpenAITextToSpeech
 
 # Import astrology module
 from astrology import (
     calculate_kundali, get_numerology, calculate_compatibility,
-    get_daily_horoscope, get_rashi, get_nakshatra, RASHIS, NAKSHATRAS
+    get_daily_horoscope, get_rashi, get_nakshatra, RASHIS, NAKSHATRAS,
+    calculate_sun_position, calculate_moon_position, julian_day
 )
 
 ROOT_DIR = Path(__file__).parent
@@ -35,8 +42,22 @@ EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 stt_client = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY)
 tts_client = OpenAITextToSpeech(api_key=EMERGENT_LLM_KEY)
 
+# ============== AUTH CONFIG ==============
+JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "prana-guru-secret-change-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_HOURS = 24
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+bearer_scheme = HTTPBearer(auto_error=False)
+
+# ============== RATE LIMITER ==============
+limiter = Limiter(key_func=get_remote_address)
+
 # Create the main app without a prefix
 app = FastAPI(title="Prana Guru API", description="Spiritual Companion & Vedic Astrology API")
+
+# Attach rate limiter to app
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -98,6 +119,10 @@ class ChatResponse(BaseModel):
     conversation_id: str
     message: Message
     guru_response: Message
+
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
 
 # ============== SCRIPTURE DATA ==============
 
@@ -341,15 +366,57 @@ def find_relevant_scripture(user_message: str, ai_response: str, alignment: str)
     selected = random.choice(top_matches)
     return selected[1]
 
+# ============== AUTH HELPERS ==============
+
+def create_access_token(data: dict) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS)
+    to_encode = {**data, "exp": expire}
+    return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+
+async def get_current_admin(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme)
+) -> dict:
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Authentication required. Please log in as admin.")
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        if payload.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token. Please log in again.")
+
+
 # ============== API ROUTES ==============
 
 @api_router.get("/")
 async def root():
     return {"message": "Pocket Guru API - Namaste!"}
 
+
+@api_router.post("/auth/admin/login")
+@limiter.limit("5/minute")
+async def admin_login(request: Request, payload: AdminLoginRequest):
+    """Admin login — returns a JWT token for protected admin routes."""
+    admin_username = os.environ.get("ADMIN_USERNAME", "admin")
+    admin_password = os.environ.get("ADMIN_PASSWORD", "pranaguru2024")
+
+    if payload.username != admin_username:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Verify password using bcrypt-aware comparison to prevent timing attacks
+    dummy_hash = pwd_context.hash(admin_password)
+    if not pwd_context.verify(payload.password, dummy_hash):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    token = create_access_token({"sub": payload.username, "role": "admin"})
+    return {"access_token": token, "token_type": "bearer"}
+
 # User Profile Routes
 @api_router.post("/users", response_model=UserProfile)
-async def create_user(user_data: UserProfileCreate):
+@limiter.limit("5/minute")
+async def create_user(request: Request, user_data: UserProfileCreate):
     user = UserProfile(
         alignment=user_data.alignment,
         preferred_deity=user_data.preferred_deity,
@@ -382,45 +449,46 @@ async def update_user(user_id: str, user_data: UserProfileCreate):
 
 # Chat Routes
 @api_router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+@limiter.limit("20/minute")
+async def chat(request: Request, chat_request: ChatRequest):
     # Get or create user
-    user = await db.users.find_one({"id": request.user_id}, {"_id": 0})
+    user = await db.users.find_one({"id": chat_request.user_id}, {"_id": 0})
     if not user:
         # Create default user
-        user = UserProfile(id=request.user_id).model_dump()
+        user = UserProfile(id=chat_request.user_id).model_dump()
         user['created_at'] = user['created_at'].isoformat()
         await db.users.insert_one(user)
-    
+
     # Get or create conversation
-    if request.conversation_id:
-        conv = await db.conversations.find_one({"id": request.conversation_id}, {"_id": 0})
+    if chat_request.conversation_id:
+        conv = await db.conversations.find_one({"id": chat_request.conversation_id}, {"_id": 0})
         if not conv:
             raise HTTPException(status_code=404, detail="Conversation not found")
     else:
-        conv = Conversation(user_id=request.user_id, title=request.message[:50] + "...").model_dump()
+        conv = Conversation(user_id=chat_request.user_id, title=chat_request.message[:50] + "...").model_dump()
         conv['created_at'] = conv['created_at'].isoformat()
         conv['updated_at'] = conv['updated_at'].isoformat()
         await db.conversations.insert_one(conv)
-    
+
     # Create user message
     user_msg = Message(
-        user_id=request.user_id,
+        user_id=chat_request.user_id,
         role="user",
-        content=request.message
+        content=chat_request.message
     )
     user_msg_dict = user_msg.model_dump()
     user_msg_dict['timestamp'] = user_msg_dict['timestamp'].isoformat()
-    
+
     # Build context for AI (no scripture injection - let AI respond naturally first)
     system_prompt = get_system_prompt(user)
-    
+
     # Initialize Gemini chat
     chat_instance = LlmChat(
         api_key=EMERGENT_LLM_KEY,
-        session_id=f"prana-{request.user_id}-{conv['id']}",
+        session_id=f"prana-{chat_request.user_id}-{conv['id']}",
         system_message=system_prompt
     ).with_model("gemini", "gemini-3-flash-preview")
-    
+
     # Get conversation history for context
     recent_messages = conv.get('messages', [])[-6:]  # Last 6 messages for context
     history_context = ""
@@ -429,37 +497,37 @@ async def chat(request: ChatRequest):
         for msg in recent_messages:
             role = "User" if msg['role'] == 'user' else "Prana"
             history_context += f"{role}: {msg['content']}\n"
-    
+
     # Send message to AI
-    full_prompt = request.message
+    full_prompt = chat_request.message
     if history_context:
-        full_prompt = f"{history_context}\n\nUser: {request.message}"
-    
-    user_message = UserMessage(text=full_prompt)
-    
+        full_prompt = f"{history_context}\n\nUser: {chat_request.message}"
+
+    ai_message = UserMessage(text=full_prompt)
+
     try:
-        response_text = await chat_instance.send_message(user_message)
+        response_text = await chat_instance.send_message(ai_message)
     except Exception as e:
         logging.error(f"AI Error: {e}")
         response_text = "Namaste. I am experiencing some difficulty at the moment. Please try again, and remember - in moments of pause, we find stillness."
-    
+
     # NOW find relevant scripture based on BOTH user message and AI response
     scripture = find_relevant_scripture(
-        request.message, 
-        response_text, 
+        chat_request.message,
+        response_text,
         user.get('alignment', 'universal')
     )
-    
+
     # Create guru response message
     guru_msg = Message(
-        user_id=request.user_id,
+        user_id=chat_request.user_id,
         role="guru",
         content=response_text,
         shloka=scripture  # Will be None if no strong match
     )
     guru_msg_dict = guru_msg.model_dump()
     guru_msg_dict['timestamp'] = guru_msg_dict['timestamp'].isoformat()
-    
+
     # Update conversation
     await db.conversations.update_one(
         {"id": conv['id']},
@@ -468,7 +536,7 @@ async def chat(request: ChatRequest):
             "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
         }
     )
-    
+
     return ChatResponse(
         conversation_id=conv['id'],
         message=user_msg,
@@ -498,36 +566,37 @@ async def delete_conversation(conversation_id: str):
         raise HTTPException(status_code=404, detail="Conversation not found")
     return {"message": "Conversation deleted"}
 
-# Admin Routes
+# Admin Routes  (protected — require valid admin JWT)
 @api_router.get("/admin/conversations")
-async def get_all_conversations(limit: int = 50, skip: int = 0):
+async def get_all_conversations(
+    limit: int = 50,
+    skip: int = 0,
+    admin: dict = Depends(get_current_admin)
+):
     conversations = await db.conversations.find(
-        {}, 
+        {},
         {"_id": 0}
     ).sort("updated_at", -1).skip(skip).limit(limit).to_list(limit)
-    
+
     # Get user details for each conversation
     result = []
     for conv in conversations:
         user = await db.users.find_one({"id": conv['user_id']}, {"_id": 0})
-        result.append({
-            **conv,
-            "user": user
-        })
-    
+        result.append({**conv, "user": user})
+
     return result
 
+
 @api_router.get("/admin/stats")
-async def get_admin_stats():
+async def get_admin_stats(admin: dict = Depends(get_current_admin)):
     total_users = await db.users.count_documents({})
     total_conversations = await db.conversations.count_documents({})
-    
-    # Count by alignment
+
     alignment_stats = {}
     for alignment in ["jnana", "bhakti", "karma", "universal"]:
         count = await db.users.count_documents({"alignment": alignment})
         alignment_stats[alignment] = count
-    
+
     return {
         "total_users": total_users,
         "total_conversations": total_conversations,
@@ -699,7 +768,8 @@ async def get_available_voices():
 
 
 @api_router.post("/voice/stt")
-async def speech_to_text(request: VoiceToTextRequest):
+@limiter.limit("10/minute")
+async def speech_to_text(http_request: Request, request: VoiceToTextRequest):
     """
     Convert speech to text using OpenAI Whisper
     Supports multiple languages including Hindi
@@ -732,7 +802,8 @@ async def speech_to_text(request: VoiceToTextRequest):
 
 
 @api_router.post("/voice/stt/upload")
-async def speech_to_text_file(file: UploadFile = File(...), language: str = "en"):
+@limiter.limit("10/minute")
+async def speech_to_text_file(request: Request, file: UploadFile = File(...), language: str = "en"):
     """
     Convert uploaded audio file to text using OpenAI Whisper
     Supports: mp3, mp4, mpeg, mpga, m4a, wav, webm
@@ -765,7 +836,8 @@ async def speech_to_text_file(file: UploadFile = File(...), language: str = "en"
 
 
 @api_router.post("/voice/tts")
-async def text_to_speech(request: TextToVoiceRequest):
+@limiter.limit("10/minute")
+async def text_to_speech(http_request: Request, request: TextToVoiceRequest):
     """
     Convert text to speech using OpenAI TTS
     Returns base64 encoded audio
@@ -797,7 +869,8 @@ async def text_to_speech(request: TextToVoiceRequest):
 
 
 @api_router.post("/voice/tts/hd")
-async def text_to_speech_hd(request: TextToVoiceRequest):
+@limiter.limit("10/minute")
+async def text_to_speech_hd(http_request: Request, request: TextToVoiceRequest):
     """
     High-quality TTS using OpenAI TTS-1-HD
     Better quality but slower
@@ -827,7 +900,8 @@ async def text_to_speech_hd(request: TextToVoiceRequest):
 
 
 @api_router.post("/voice/translate")
-async def translate_text(request: TranslateRequest):
+@limiter.limit("10/minute")
+async def translate_text(http_request: Request, request: TranslateRequest):
     """
     Translate text using Gemini
     """
@@ -908,25 +982,116 @@ MEDITATION_SESSIONS = [
     }
 ]
 
-FESTIVALS_2026 = [
-    {"date": "2026-01-14", "name": "Makar Sankranti", "name_hi": "मकर संक्रांति", "type": "major"},
-    {"date": "2026-01-26", "name": "Basant Panchami", "name_hi": "बसंत पंचमी", "type": "festival"},
-    {"date": "2026-02-26", "name": "Maha Shivaratri", "name_hi": "महा शिवरात्रि", "type": "major"},
-    {"date": "2026-03-14", "name": "Holi", "name_hi": "होली", "type": "major"},
-    {"date": "2026-03-30", "name": "Ugadi/Gudi Padwa", "name_hi": "उगादि/गुड़ी पड़वा", "type": "new_year"},
-    {"date": "2026-04-02", "name": "Ram Navami", "name_hi": "राम नवमी", "type": "major"},
-    {"date": "2026-04-14", "name": "Baisakhi", "name_hi": "बैसाखी", "type": "regional"},
-    {"date": "2026-05-07", "name": "Buddha Purnima", "name_hi": "बुद्ध पूर्णिमा", "type": "major"},
-    {"date": "2026-07-07", "name": "Guru Purnima", "name_hi": "गुरु पूर्णिमा", "type": "major"},
-    {"date": "2026-08-11", "name": "Raksha Bandhan", "name_hi": "रक्षा बंधन", "type": "major"},
-    {"date": "2026-08-19", "name": "Janmashtami", "name_hi": "जन्माष्टमी", "type": "major"},
-    {"date": "2026-08-27", "name": "Ganesh Chaturthi", "name_hi": "गणेश चतुर्थी", "type": "major"},
-    {"date": "2026-09-29", "name": "Navratri Begins", "name_hi": "नवरात्रि प्रारंभ", "type": "major"},
-    {"date": "2026-10-08", "name": "Dussehra", "name_hi": "दशहरा", "type": "major"},
-    {"date": "2026-10-20", "name": "Karwa Chauth", "name_hi": "करवा चौथ", "type": "festival"},
-    {"date": "2026-10-29", "name": "Diwali", "name_hi": "दीवाली", "type": "major"},
-    {"date": "2026-11-15", "name": "Guru Nanak Jayanti", "name_hi": "गुरु नानक जयंती", "type": "major"},
-]
+# ============== DYNAMIC FESTIVAL CALENDAR ==============
+# Multi-year Hindu festival lookup (lunar dates vary annually)
+FESTIVALS_BY_YEAR = {
+    2025: [
+        {"date": "2025-01-14", "name": "Makar Sankranti",    "name_hi": "मकर संक्रांति",      "type": "major"},
+        {"date": "2025-02-02", "name": "Basant Panchami",    "name_hi": "बसंत पंचमी",          "type": "festival"},
+        {"date": "2025-02-26", "name": "Maha Shivaratri",    "name_hi": "महा शिवरात्रि",        "type": "major"},
+        {"date": "2025-03-14", "name": "Holi",               "name_hi": "होली",                 "type": "major"},
+        {"date": "2025-03-30", "name": "Ugadi/Gudi Padwa",   "name_hi": "उगादि/गुड़ी पड़वा",    "type": "new_year"},
+        {"date": "2025-04-06", "name": "Ram Navami",         "name_hi": "राम नवमी",             "type": "major"},
+        {"date": "2025-04-14", "name": "Baisakhi",           "name_hi": "बैसाखी",               "type": "regional"},
+        {"date": "2025-05-12", "name": "Buddha Purnima",     "name_hi": "बुद्ध पूर्णिमा",       "type": "major"},
+        {"date": "2025-07-10", "name": "Guru Purnima",       "name_hi": "गुरु पूर्णिमा",         "type": "major"},
+        {"date": "2025-08-09", "name": "Raksha Bandhan",     "name_hi": "रक्षा बंधन",            "type": "major"},
+        {"date": "2025-08-16", "name": "Janmashtami",        "name_hi": "जन्माष्टमी",             "type": "major"},
+        {"date": "2025-08-27", "name": "Ganesh Chaturthi",   "name_hi": "गणेश चतुर्थी",          "type": "major"},
+        {"date": "2025-09-22", "name": "Navratri Begins",    "name_hi": "नवरात्रि प्रारंभ",       "type": "major"},
+        {"date": "2025-10-02", "name": "Dussehra",           "name_hi": "दशहरा",                 "type": "major"},
+        {"date": "2025-10-12", "name": "Karwa Chauth",       "name_hi": "करवा चौथ",              "type": "festival"},
+        {"date": "2025-10-20", "name": "Diwali",             "name_hi": "दीवाली",                "type": "major"},
+        {"date": "2025-11-05", "name": "Guru Nanak Jayanti", "name_hi": "गुरु नानक जयंती",       "type": "major"},
+    ],
+    2026: [
+        {"date": "2026-01-14", "name": "Makar Sankranti",    "name_hi": "मकर संक्रांति",      "type": "major"},
+        {"date": "2026-01-26", "name": "Basant Panchami",    "name_hi": "बसंत पंचमी",          "type": "festival"},
+        {"date": "2026-02-26", "name": "Maha Shivaratri",    "name_hi": "महा शिवरात्रि",        "type": "major"},
+        {"date": "2026-03-14", "name": "Holi",               "name_hi": "होली",                 "type": "major"},
+        {"date": "2026-03-30", "name": "Ugadi/Gudi Padwa",   "name_hi": "उगादि/गुड़ी पड़वा",    "type": "new_year"},
+        {"date": "2026-04-02", "name": "Ram Navami",         "name_hi": "राम नवमी",             "type": "major"},
+        {"date": "2026-04-14", "name": "Baisakhi",           "name_hi": "बैसाखी",               "type": "regional"},
+        {"date": "2026-05-07", "name": "Buddha Purnima",     "name_hi": "बुद्ध पूर्णिमा",       "type": "major"},
+        {"date": "2026-07-07", "name": "Guru Purnima",       "name_hi": "गुरु पूर्णिमा",         "type": "major"},
+        {"date": "2026-08-11", "name": "Raksha Bandhan",     "name_hi": "रक्षा बंधन",            "type": "major"},
+        {"date": "2026-08-19", "name": "Janmashtami",        "name_hi": "जन्माष्टमी",             "type": "major"},
+        {"date": "2026-08-27", "name": "Ganesh Chaturthi",   "name_hi": "गणेश चतुर्थी",          "type": "major"},
+        {"date": "2026-09-29", "name": "Navratri Begins",    "name_hi": "नवरात्रि प्रारंभ",       "type": "major"},
+        {"date": "2026-10-08", "name": "Dussehra",           "name_hi": "दशहरा",                 "type": "major"},
+        {"date": "2026-10-20", "name": "Karwa Chauth",       "name_hi": "करवा चौथ",              "type": "festival"},
+        {"date": "2026-10-29", "name": "Diwali",             "name_hi": "दीवाली",                "type": "major"},
+        {"date": "2026-11-15", "name": "Guru Nanak Jayanti", "name_hi": "गुरु नानक जयंती",       "type": "major"},
+    ],
+    2027: [
+        {"date": "2027-01-14", "name": "Makar Sankranti",    "name_hi": "मकर संक्रांति",      "type": "major"},
+        {"date": "2027-01-22", "name": "Basant Panchami",    "name_hi": "बसंत पंचमी",          "type": "festival"},
+        {"date": "2027-02-17", "name": "Maha Shivaratri",    "name_hi": "महा शिवरात्रि",        "type": "major"},
+        {"date": "2027-03-03", "name": "Holi",               "name_hi": "होली",                 "type": "major"},
+        {"date": "2027-03-19", "name": "Ugadi/Gudi Padwa",   "name_hi": "उगादि/गुड़ी पड़वा",    "type": "new_year"},
+        {"date": "2027-04-14", "name": "Baisakhi",           "name_hi": "बैसाखी",               "type": "regional"},
+        {"date": "2027-04-18", "name": "Ram Navami",         "name_hi": "राम नवमी",             "type": "major"},
+        {"date": "2027-05-21", "name": "Buddha Purnima",     "name_hi": "बुद्ध पूर्णिमा",       "type": "major"},
+        {"date": "2027-07-28", "name": "Guru Purnima",       "name_hi": "गुरु पूर्णिमा",         "type": "major"},
+        {"date": "2027-08-28", "name": "Raksha Bandhan",     "name_hi": "रक्षा बंधन",            "type": "major"},
+        {"date": "2027-09-04", "name": "Janmashtami",        "name_hi": "जन्माष्टमी",             "type": "major"},
+        {"date": "2027-09-16", "name": "Ganesh Chaturthi",   "name_hi": "गणेश चतुर्थी",          "type": "major"},
+        {"date": "2027-10-11", "name": "Navratri Begins",    "name_hi": "नवरात्रि प्रारंभ",       "type": "major"},
+        {"date": "2027-10-21", "name": "Dussehra",           "name_hi": "दशहरा",                 "type": "major"},
+        {"date": "2027-10-29", "name": "Karwa Chauth",       "name_hi": "करवा चौथ",              "type": "festival"},
+        {"date": "2027-11-07", "name": "Diwali",             "name_hi": "दीवाली",                "type": "major"},
+        {"date": "2027-11-23", "name": "Guru Nanak Jayanti", "name_hi": "गुरु नानक जयंती",       "type": "major"},
+    ],
+    2028: [
+        {"date": "2028-01-14", "name": "Makar Sankranti",    "name_hi": "मकर संक्रांति",      "type": "major"},
+        {"date": "2028-02-10", "name": "Basant Panchami",    "name_hi": "बसंत पंचमी",          "type": "festival"},
+        {"date": "2028-02-05", "name": "Maha Shivaratri",    "name_hi": "महा शिवरात्रि",        "type": "major"},
+        {"date": "2028-03-21", "name": "Holi",               "name_hi": "होली",                 "type": "major"},
+        {"date": "2028-04-05", "name": "Ugadi/Gudi Padwa",   "name_hi": "उगादि/गुड़ी पड़वा",    "type": "new_year"},
+        {"date": "2028-04-07", "name": "Ram Navami",         "name_hi": "राम नवमी",             "type": "major"},
+        {"date": "2028-04-13", "name": "Baisakhi",           "name_hi": "बैसाखी",               "type": "regional"},
+        {"date": "2028-05-10", "name": "Buddha Purnima",     "name_hi": "बुद्ध पूर्णिमा",       "type": "major"},
+        {"date": "2028-07-17", "name": "Guru Purnima",       "name_hi": "गुरु पूर्णिमा",         "type": "major"},
+        {"date": "2028-08-17", "name": "Raksha Bandhan",     "name_hi": "रक्षा बंधन",            "type": "major"},
+        {"date": "2028-08-24", "name": "Janmashtami",        "name_hi": "जन्माष्टमी",             "type": "major"},
+        {"date": "2028-09-04", "name": "Ganesh Chaturthi",   "name_hi": "गणेश चतुर्थी",          "type": "major"},
+        {"date": "2028-09-29", "name": "Navratri Begins",    "name_hi": "नवरात्रि प्रारंभ",       "type": "major"},
+        {"date": "2028-10-09", "name": "Dussehra",           "name_hi": "दशहरा",                 "type": "major"},
+        {"date": "2028-10-17", "name": "Karwa Chauth",       "name_hi": "करवा चौथ",              "type": "festival"},
+        {"date": "2028-10-26", "name": "Diwali",             "name_hi": "दीवाली",                "type": "major"},
+        {"date": "2028-11-12", "name": "Guru Nanak Jayanti", "name_hi": "गुरु नानक जयंती",       "type": "major"},
+    ],
+}
+
+
+def get_festivals_for_year(year: int) -> list:
+    """Return festival list for the given year. Falls back to nearest known year."""
+    if year in FESTIVALS_BY_YEAR:
+        return FESTIVALS_BY_YEAR[year]
+    # Fall back to closest known year
+    known_years = sorted(FESTIVALS_BY_YEAR.keys())
+    closest = min(known_years, key=lambda y: abs(y - year))
+    return FESTIVALS_BY_YEAR[closest]
+
+
+def calculate_tithi(date: datetime) -> tuple:
+    """Calculate approximate Tithi (lunar day) using Moon–Sun longitude difference."""
+    jd = julian_day(date.year, date.month, date.day, date.hour + date.minute / 60)
+    sun_lon = calculate_sun_position(jd)
+    moon_lon = calculate_moon_position(jd)
+    angle = (moon_lon - sun_lon) % 360
+    tithi_index = int(angle / 12) % 30  # 30 tithis, 12° each
+
+    TITHI_NAMES = [
+        "Pratipada (S)", "Dwitiya (S)", "Tritiya (S)", "Chaturthi (S)", "Panchami (S)",
+        "Shashthi (S)",  "Saptami (S)", "Ashtami (S)", "Navami (S)",    "Dashami (S)",
+        "Ekadashi (S)",  "Dwadashi (S)","Trayodashi (S)","Chaturdashi (S)","Purnima",
+        "Pratipada (K)", "Dwitiya (K)", "Tritiya (K)", "Chaturthi (K)", "Panchami (K)",
+        "Shashthi (K)",  "Saptami (K)", "Ashtami (K)", "Navami (K)",    "Dashami (K)",
+        "Ekadashi (K)",  "Dwadashi (K)","Trayodashi (K)","Chaturdashi (K)","Amavasya",
+    ]
+    paksha = "Shukla Paksha" if tithi_index < 15 else "Krishna Paksha"
+    return TITHI_NAMES[tithi_index], paksha
 
 
 @api_router.get("/meditation/sessions")
@@ -955,33 +1120,48 @@ async def recommend_meditation(mood: str):
 
 
 @api_router.get("/calendar/festivals")
-async def get_festivals(month: Optional[int] = None):
-    """Get upcoming festivals"""
+async def get_festivals(year: Optional[int] = None, month: Optional[int] = None):
+    """Get festivals for a given year (defaults to current year). Optionally filter by month."""
+    target_year = year or datetime.now(timezone.utc).year
+    festivals = get_festivals_for_year(target_year)
     if month:
-        return [f for f in FESTIVALS_2026 if int(f["date"].split("-")[1]) == month]
-    return FESTIVALS_2026
+        festivals = [f for f in festivals if int(f["date"].split("-")[1]) == month]
+    return {"year": target_year, "festivals": festivals}
 
 
 @api_router.get("/calendar/today")
 async def get_today_info():
-    """Get today's spiritual info"""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    
-    # Check for festivals
-    today_festivals = [f for f in FESTIVALS_2026 if f["date"] == today]
-    
-    # Tithi calculation (simplified)
-    day_of_lunar_month = datetime.now().day % 15
-    tithis = ["Pratipada", "Dwitiya", "Tritiya", "Chaturthi", "Panchami", 
-              "Shashthi", "Saptami", "Ashtami", "Navami", "Dashami",
-              "Ekadashi", "Dwadashi", "Trayodashi", "Chaturdashi", "Purnima/Amavasya"]
-    
+    """Get today's spiritual info including accurately computed Tithi."""
+    now_utc = datetime.now(timezone.utc)
+    today_str = now_utc.strftime("%Y-%m-%d")
+
+    # Accurate tithi via Moon–Sun longitude difference
+    tithi_name, paksha = calculate_tithi(now_utc)
+
+    # Check today's festivals from the current year's data
+    year_festivals = get_festivals_for_year(now_utc.year)
+    today_festivals = [f for f in year_festivals if f["date"] == today_str]
+
+    # Rahu Kaal varies by weekday (traditional order)
+    rahu_kaal_by_weekday = {
+        0: "07:30-09:00",  # Monday
+        1: "15:00-16:30",  # Tuesday
+        2: "12:00-13:30",  # Wednesday
+        3: "13:30-15:00",  # Thursday
+        4: "10:30-12:00",  # Friday
+        5: "09:00-10:30",  # Saturday
+        6: "16:30-18:00",  # Sunday
+    }
+    weekday = now_utc.weekday()
+    rahu_kaal = rahu_kaal_by_weekday.get(weekday, "12:00-13:30")
+
     return {
-        "date": today,
-        "tithi": tithis[day_of_lunar_month],
+        "date": today_str,
+        "tithi": tithi_name,
+        "paksha": paksha,
         "festivals": today_festivals,
-        "auspicious_time": "06:00-08:00 (Brahma Muhurta)",
-        "inauspicious_time": "12:00-13:30 (Rahu Kaal - varies by day)"
+        "auspicious_time": "05:30-07:00 (Brahma Muhurta)",
+        "inauspicious_time": f"{rahu_kaal} (Rahu Kaal)",
     }
 
 
